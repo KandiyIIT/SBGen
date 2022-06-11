@@ -6,6 +6,19 @@
 #include <cstdlib>
 #include <getopt.h>
 #include <map>
+#include <sstream> 
+
+#include "hill_climbing.h"
+#include "simulated_annealing.h"
+#include "cost_function.h"
+#include "utils.h"
+
+
+#define ABORT_MSG(y)\
+	{\
+	std::cerr << "sbgen: " << y << std::endl;\
+	exit(1);\
+	}
 
 
 #define no_argument				0
@@ -23,7 +36,14 @@
 #define max_frozen_loops_flag			0x08
 #define method_params_flag				0x09
 #define cost_function_params_flag		0x0a
+#define nonlinearity_flag						0x0b
+#define delta_uniformity_flag				0x0c
+#define algebraic_immunity_flag		0x0d
+#define seed_flag								0x0e
 
+#define default_try_per_thread			10000
+#define default_thread_count				1
+#define default_log								0
 
 const struct option longopts[] =
 {
@@ -37,12 +57,16 @@ const struct option longopts[] =
 	{"try_per_thread",			required_argument,	0,	try_per_thread_flag},
 	{"method_params",			required_argument,	0,	method_params_flag},
 	{"cost_function_params",required_argument,	0,	cost_function_params_flag},
+	{"nonlinearity",				required_argument,	0,	nonlinearity_flag},
+	{"delta_uniformity",			required_argument,	0,	delta_uniformity_flag},
+	{"algebraic_immunity",	required_argument,	0,	algebraic_immunity_flag},
+	{"seed",							required_argument,	0,	seed_flag},
 	{0,0,0,0},
 };
 
 void print_help()
 {
-	cout << "Usage: sbgen --method [METHOD] [OPTIONS] \n"
+	std::cout << "Usage: sbgen --method [METHOD] [OPTIONS] \n"
 		<< "List of options:\n\n"
 			<< "  --visibility\n"
 			<< "       Enable verbose mode\n"
@@ -50,6 +74,9 @@ void print_help()
 			<< "       Print version info\n"
 			<< "  --help\n"
 			<< "       Print help message\n"
+			<< "  --seed\n"
+			<< "       seed for randomness. Warning: in multithread mode there is\n"
+			<< "       additional randomnes caused by concurrency\n"
 			<< "  --method [hill_climbing|simulated_annealing]\n"
 			<< "       hill_climbing = hill climbing method\n"
 			<< "       simulated_annealing = simulated annealing method\n"
@@ -87,8 +114,15 @@ void print_help()
 			<< "       param1: n\n"
 			<< "       Example: --cost_function_params=\"{5}\"\n"
 			<< "  wcf\n"
-			<< "       Has no free options\n";
-			<< "       Please refer to https://github.com/KandiyIIT/SBGen/README.md for more information.\n";
+			<< "       Has no free options\n"
+			<< "       Please refer to https://github.com/KandiyIIT/SBGen/README.md for more information.\n"
+		<< "Target properties:\n\n"
+			<< "  --nonlinearity\n"
+			<< "       target nonlinearity value.\n"
+			<< "  --delta_uniformity\n"
+			<< "       target delta uniformity value.\n"
+			<< "  --algebraic_immunity\n"
+			<< "       target algebraic immunity value.\n";
 }
 
 void parse_options(int argc, char **argv, std::map<int, std::string>& options)
@@ -110,43 +144,255 @@ void parse_options(int argc, char **argv, std::map<int, std::string>& options)
 	}
 }
 
+std::vector<std::string> &split(const std::string &s, char delim,std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        if (item.length() > 0) {
+            elems.push_back(item);  
+        }
+    }
+    return elems;
+}
+
+
+std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, elems);
+    return elems;
+}
+
 template<typename T>
-std::function<cost_info_t<T>(cost_function_data_t*, std::array<uint8_t, 256>)> 
+std::pair<std::function<sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>,
+	sbgen::cost_function_data_t*>
 get_cost_function(std::map<int, std::string>& options)
 {
-	auto parameter = options.find(method_flag);
-	if (parameter == options.end()) 
+	auto parameter = options.find(cost_function_flag);
+	if (parameter != options.end()) 
 	{
 		if(parameter->second == "whs")
 		{
-			
+			int32_t x = 0;
+			int32_t r = 3;
+            
+			parameter = options.find(cost_function_params_flag);
+			if (parameter != options.end()) 
+			{
+                std::vector<std::string> values = split(parameter->second, ',');
+				
+				if(values.size()!=2)
+				{
+					ABORT_MSG("Invalid parameters count for whs cost function");
+				}
+				
+				try {
+					x = std::stoi(values[0]);
+					r = std::stoi(values[1]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				
+				return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
+					, sbgen::cost_function_data_t*>(sbgen::whs<T>,new sbgen::whs_function_data_t(r, x));
+			} 
+			else
+			{
+				ABORT_MSG("Can't find whs parameters");
+			}
 		} 
 		else if(parameter->second == "pcf")
 		{
-			
+			int32_t n = 5;
+            
+			parameter = options.find(cost_function_params_flag);
+			if (parameter != options.end()) 
+			{
+                std::vector<std::string> values = split(parameter->second, ',');
+				
+				if(values.size()!=1)
+				{
+					ABORT_MSG("Invalid parameters count for pcf cost function");
+				}
+				
+				try {
+					n = std::stoi(values[0]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				
+				return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
+				, sbgen::cost_function_data_t*>(sbgen::pcf<T>,new sbgen::pcf_function_data_t(n));
+			} 
+			else
+			{
+				ABORT_MSG("Can't find pcf parameters");
+			}
 		}
 		else if(parameter->second == "wcf")
 		{
-			
+			return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
+				, sbgen::cost_function_data_t*>(sbgen::wcf<T>,nullptr);
 		}
 		ABORT_MSG("Unknown cost function. See help for avaliable cost functions");
 	}
-	return sbgen::whs<T>;
+	return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
+		, sbgen::cost_function_data_t*>(sbgen::whs<T>,nullptr);
+}
+
+void setup_properties (sbgen::properties_info_t info,  std::map<int, std::string>& options) 
+{
+	try 
+	{
+		auto property = options.find(nonlinearity_flag);
+		if (property != options.end()) 
+		{
+			setup_property( &info, SBGEN_NONLINEARITY, std::stoi(property->second));
+		}
+		else
+		{
+			ABORT_MSG("Need target nonlinearity");
+		}
+		
+		options.find(delta_uniformity_flag);
+		if (property != options.end()) 
+		{
+			setup_property( &info, SBGEN_DELTA_UNIFORMITY, std::stoi(property->second));
+		}
+		
+		options.find(algebraic_immunity_flag);
+		if (property != options.end()) 
+		{
+			setup_property( &info, SBGEN_ALGEBRAIC_IMMUNITY, std::stoi(property->second));
+		}
+		
+		options.find(seed_flag);
+		if (property != options.end()) 
+		{
+				info.use_random_seed = false;
+				info.seed = std::stoi(property->second);
+		}
+		else
+		{
+				info.use_random_seed = true;
+		}
+	}
+	catch (const std::invalid_argument & e) 
+	{
+		std::cout << e.what() << "\n";
+	}
+	catch (const std::out_of_range & e) 
+	{
+		std::cout << e.what() << "\n";
+	}
 }
 
 template<typename T>
 void run_generator(std::map<int, std::string>& options)
 {
+	int32_t thread_count = default_try_per_thread;
+	int32_t try_per_thread = default_thread_count;
+	int32_t max_frozen_count = try_per_thread;
+	
 	auto parameter = options.find(method_flag);
-	if (parameter == options.end()) 
+	if (parameter != options.end()) 
 	{
+		try 
+		{
+			auto property = options.find(thread_count_flag);
+			if (property != options.end())
+				thread_count = std::stoi(property->second);
+			
+			property = options.find(try_per_thread_flag);
+			if (property != options.end())
+				try_per_thread = std::stoi(property->second);
+			
+			property = options.find(max_frozen_loops_flag);
+			if (property != options.end())
+				max_frozen_count = std::stoi(property->second);
+		}
+		catch (const std::invalid_argument & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+		catch (const std::out_of_range & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+		
 		if(parameter->second == "hill_climbing")
 		{
+			auto cost = get_cost_function<T>(options);
+			sbgen::hill_climbing_info_t<T> info;
+			info.thread_count = thread_count;
+			info.try_per_thread = try_per_thread;
+			info.max_frozen_count = max_frozen_count;
+			info.cost_function = cost.first;
+			info.cost_data.reset(cost.second);
+			setup_properties(static_cast<sbgen::properties_info_t>(info), options);
 			
+			auto sbox = sbgen::hill_climbing<T>(info);
+
+			if (!sbox.has_value()) {
+				PRINT_SBOX(sbox.value());
+			}
 		} 
 		else if(parameter->second == "simulated_annealing")
 		{
+			auto cost = get_cost_function<T>(options);
+			sbgen::simulated_annealing_info_t<T> info;
+			info.thread_count = thread_count;
+			info.try_per_thread = try_per_thread;
+			info.max_frozen_outer_loops = max_frozen_count;
+			info.cost_function = cost.first;
+			info.cost_data.reset(cost.second);
+			setup_properties(static_cast<sbgen::properties_info_t>(info), options);
 			
+			parameter = options.find(method_params_flag);
+			if (parameter != options.end()) 
+			{
+                std::vector<std::string> values = split(parameter->second, ',');
+				if(values.size() != 4)
+					ABORT_MSG("Invalid simulated annealing parameters. See help");
+				
+				try 
+				{
+					info.max_outer_loops = std::stoi(values[0]);
+					info.max_inner_loops = std::stoi(values[1]);
+					info.initial_temperature = std::stod(values[2]);
+					info.alpha_parameter = std::stod(values[3]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				
+			}
+			else
+			{
+				ABORT_MSG("Can't find simulated annealing parameters");
+			}
+			
+			auto sbox = sbgen::simulated_annealing<T>(info);
+
+			if (!sbox.has_value()) {
+				PRINT_SBOX(sbox.value());
+			}
 		}
 	}
 }
@@ -158,7 +404,7 @@ int main(int argc, char** argv)
 	parse_options(argc,argv, options);
 	
 	auto parameter = options.find(help_flag);
-	if (parameter != options.end()) 
+	if (parameter != options.end() || argc == 1) 
 	{
 		print_help();
 		return 0;
