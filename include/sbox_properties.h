@@ -1,26 +1,57 @@
+// Implementation of properties of s-box and useful transformations
 #ifndef  _SBOX_PROPERTIES_H_
 #define _SBOX_PROPERTIES_H_
 
 namespace sbgen {
-	
+
+/**
+ * @brief Holds S-box transformations
+ *
+ * Contains set of functions and precomuted values for property calculation
+ **/
 class transform_utils {
 public:
-	static void fwht_transform(uint8_t* truth_table, int32_t* spectre)
+	
+  /**
+   * @brief Walsh-Hadamard transform of boolean function
+   *
+   * Compute Walsh-Hadamard transform and return spectre via parameter
+   *
+   * @param truth_table
+   *    thruth table of boolean function
+   * @param spectre
+   *    output param. Spectre of boolean function
+   *@returns
+   *   spectre of boolean function via second parameter
+   */
+	static void fwht_transform
+	(
+		uint8_t* truth_table, 
+		int32_t* spectre
+	)
 	{
 		int32_t step = 1;
+		
 		for (int32_t i = 0; i < 256; i++)
 			spectre[i] = -2 * truth_table[255 - i] + 1;
-		while (step < 256) {
+		
+		while (step < 256) 
+		{
 			int32_t left = 0;
 			int32_t numOfBlocks = (256 / (step * 2));
-			for (int32_t i = 0; i < numOfBlocks; i++) {
+			
+			for (int32_t i = 0; i < numOfBlocks; i++) 
+			{
 				int32_t right = left + step;
 
-				for (int32_t j = 0; j < step; j++) {
+				for (int32_t j = 0; j < step; j++) 
+				{
 					int32_t a = spectre[right];
 					int32_t b = spectre[left];
+					
 					spectre[left] = a + b;
 					spectre[right] = a - b;
+					
 					left++;
 					right++;
 				}
@@ -30,8 +61,23 @@ public:
 		}
 		return;
 	}
+
 	
-	static void to_monomials(uint8_t* x, bool* monomials, int max_deg) 
+  /**
+   * @brief Compute values of all monomials degree less of equal max_deg for set of boolean values
+   * 
+   * This function used in algebraic immunity calculation.
+   * 
+   * @param x
+   *    initial values
+   * @param monomials
+   *    monomial values
+   * @param max_deg
+   *    maximal degree of monomials
+   *@returns
+   *   calculated monomial values for set x via second parameter
+   */
+	static void to_monomials(bool* x, bool* monomials, int max_deg) 
 	{
 		monomials[0] = 1;
 		//monomials x1,x8,y1,...,y8
@@ -40,10 +86,13 @@ public:
 
 		if (max_deg < 2)
 			return;
+		
 		uint32_t pos = 17;
 		//monomials x1x2
-		for (int i = 1;i < 16;i++) {
-			for (int j = i + 1;j <= 16;j++) {
+		for (int i = 1;i < 16;i++)
+		{
+			for (int j = i + 1;j <= 16;j++) 
+			{
 				monomials[pos] = monomials[i] & monomials[j];
 				pos++;
 			}
@@ -52,9 +101,12 @@ public:
 			return;
     
 		//monomials x1x2x3
-		for (int i = 1;i < 15;i++) {
-			for (int j = i + 1;j <= 16;j++) {
-				for (int k = j + 1;k <= 16;k++) {
+		for (int i = 1;i < 15;i++) 
+		{
+			for (int j = i + 1;j <= 16;j++) 
+			{
+				for (int k = j + 1;k <= 16;k++) 
+				{
 					monomials[pos] = monomials[i] & monomials[j] & monomials[k];
 					pos++;
 				}
@@ -62,21 +114,50 @@ public:
 		}
 	}
 
-	static uint32_t gauss_elimination(bool a[137][256],int n,int m) 
+
+  /**
+   * @brief Compute matrix rank
+   * 
+   * Compute matrix rank via gauss elimination for 137x256 (or less) matrix with elements in GF(2).
+   * Used in algebraic degree computation.
+   * 
+   * @param a
+   *    matrix (system of linear equations)
+   * @param n
+   *    columns count
+   * @param m
+   *    rows count
+   *@returns
+   *   rank of matix a
+   */
+	static uint32_t gauss_elimination
+	(
+		bool a[137][256],
+		int n,
+		int m
+	) 
 	{
 		uint32_t rank = 256;
 		bool line_used[137];
+		
 		for (int i = 0;i < 137;i++)
 			line_used[i] = false;
-		for (int i = 0; i < m; ++i) {
+		
+		for (int i = 0; i < m; ++i) 
+		{
 			int j;
+			
 			for (j = 0; j < n; ++j)
 				if (!line_used[j] && a[j][i])
 					break;
+				
 			if (j == n)
 				--rank;
-			else {
+			
+			else 
+			{
 				line_used[j] = true;
+				
 				for (int k = 0; k < n; ++k)
 					if (k != j && a[k][i])
 						for (int p = i + 1; p < m; ++p)
@@ -165,9 +246,9 @@ public:
 		{1,1,1,1,1,0,0,0}, {1,1,1,1,1,0,0,1}, {1,1,1,1,1,0,1,0}, {1,1,1,1,1,0,1,1},
 		{1,1,1,1,1,1,0,0}, {1,1,1,1,1,1,0,1}, {1,1,1,1,1,1,1,0}, {1,1,1,1,1,1,1,1}
 	};
-};
+}; // class transform_utils 
 
-
+// Macro definitions for s-box properties
 #define SBGEN_MAX_PROPERTIES_NUMBER	3
 
 #define SBGEN_NONLINEARITY				0
@@ -184,9 +265,24 @@ public:
 		(config)->target_properties[property_index] = target_value;\
 	} while(false);
 
+/**
+ * @brief S-box properties
+ *
+ * Contains set of functions that compute s-box properties
+ **/
 class properties {
 public:
 
+  /**
+   * @brief Nonlinearity
+   * 
+   * Compute S-box nonlinearity
+   * 
+   * @param sbox
+   *    target sbox
+   *@returns
+   *   sbox nonlinearity
+   */
 	static int32_t nonlinearity(std::array<uint8_t, 256>& sbox)
 	{
 		uint8_t     truth_table[256];	
@@ -194,6 +290,7 @@ public:
 		int         max_spectre = 0;
     
 		max_spectre = 0;
+		
 		for (uint16_t b = 1; b <256 ; b++) 
 		{
 			for (int i = 0;i < 256;i++) {
@@ -215,6 +312,16 @@ public:
 		return 128 - max_spectre / 2;
 	}
 	
+  /**
+   * @brief Delta uniformity
+   * 
+   * Compute S-box delta uniformity
+   * 
+   * @param sbox
+   *    target sbox
+   *@returns
+   *   sbox delta uniformity
+   */
 	static int32_t  delta_uniformity(std::array<uint8_t, 256>& sbox) 
 	{
 		int32_t max_res = 0;
@@ -237,6 +344,16 @@ public:
 		return max_res;
 	}
 	
+  /**
+   * @brief Algebraic immunity
+   * 
+   * Compute S-box algebraic immunity
+   * 
+   * @param sbox
+   *    target sbox
+   *@returns
+   *   sbox algebraic immunity
+   */
 	static int32_t algebraic_immunity(std::array<uint8_t, 256>& sbox) 
 	{
 
@@ -256,12 +373,12 @@ public:
 			values[10] = transform_utils::bits[y][2]; values[11] = transform_utils::bits[y][3];
 			values[12] = transform_utils::bits[y][4]; values[13] = transform_utils::bits[y][5];
 			values[14] = transform_utils::bits[y][6]; values[15] = transform_utils::bits[y][7];
-			transform_utils::to_monomials((uint8_t*)&values, (bool*)tmp,2);
+			transform_utils::to_monomials((bool*)&values, (bool*)tmp,2);
 			for (int j = 0;j < 137;j++)
 				mat[j][i] = tmp[j];
 		}
 
-	uint32_t rank = transform_utils::gauss_elimination(mat,137,256);
+		uint32_t rank = transform_utils::gauss_elimination(mat,137,256);
 
 		if (rank == 137)
 			return 3;
@@ -277,7 +394,7 @@ public:
 			values[10] = transform_utils::bits[y][2]; values[11] = transform_utils::bits[y][3];
 			values[12] = transform_utils::bits[y][4]; values[13] = transform_utils::bits[y][5];
 			values[14] = transform_utils::bits[y][6]; values[15] = transform_utils::bits[y][7];
-			transform_utils::to_monomials((uint8_t*)&values, (bool*)tmp, 1);
+			transform_utils::to_monomials((bool*)&values, (bool*)tmp, 1);
 			for (int j = 0;j < 17;j++)
 				mat[j][i] = tmp[j];
 		}
@@ -290,9 +407,9 @@ public:
 		return 1;
 	}
 	
-};
+}; // class properties
 
     
 }; // namespace sbgen
 
-#endif
+#endif // _SBOX_PROPERTIES_H_

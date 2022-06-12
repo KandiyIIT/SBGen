@@ -1,3 +1,4 @@
+// Simulated annealing implementation
 #ifndef  _SBGEN_SIMULATED_ANNEALING_H_
 #define _SBGEN_SIMULATED_ANNEALING_H_
 
@@ -13,24 +14,55 @@
 
 namespace sbgen {
 
+/**
+ * @brief Simulated annealing method parameters
+ **/
 template <typename T>
 struct simulated_annealing_info_t : public properties_info_t{
+	// Thread count
 	int32_t thread_count;
+	// maximal try count in one thread
 	int32_t try_per_thread;
-    uint32_t max_outer_loops;
-    uint32_t max_inner_loops;
-    uint32_t max_frozen_outer_loops;
+	// maximal outer loops count
+	int32_t max_outer_loops;
+	// maximal inner loops count
+	int32_t max_inner_loops;
+	// maximal frozen loops count
+	int32_t max_frozen_outer_loops;
+	// visibility of computation process
 	bool is_log_enabled;
-    double initial_temperature;
-    double alpha_parameter;
+    
+	// annealing parameters
+	double initial_temperature;
+	double alpha_parameter;
 
+	// cost function and cost function data
 	std::unique_ptr< cost_function_data_t> cost_data;
 	std::function< cost_info_t<T>(cost_function_data_t*, std::array<uint8_t, 256>)> cost_function;
-};
+}; // simulated_annealing_info_t
 
+
+/**
+  * @brief One-thread simulated annealing generator
+  *
+  * Simulated annealing for one thread
+  *
+  * @param params
+  *    shared data
+  * @param info
+  *    simulated annealing parameters
+  * @param id
+  *    thread id (used for randomness)
+  *@returns 
+  *   s-box with target properties  in params
+  */
 template<typename T>
-void simulated_annealing_thread_function(shared_info_t<T>& params, 
-											simulated_annealing_info_t<T>& info, int id) {
+void simulated_annealing_thread_function (
+	shared_info_t<T>& params, 
+	simulated_annealing_info_t<T>& info, 
+	int id
+) 
+{
 	std::random_device rd;
 	unsigned seed;
 	bool      accept_in_this_loop = false;
@@ -50,10 +82,10 @@ void simulated_annealing_thread_function(shared_info_t<T>& params,
 	cost_info_t<T> new_cost;
 	double    current_temperature = info.initial_temperature;
 
-	for (int x = 0;x < info.max_outer_loops;x++) {
+	for (int32_t x = 0;x < info.max_outer_loops;x++) {
 		accept_in_this_loop = false;
 		
-		for (int y = 0;y < info.max_inner_loops;y++) {
+		for (int32_t y = 0;y < info.max_inner_loops;y++) {
 			params.iteration.fetch_add(1);
 			
 			int pos_1 = 0;
@@ -132,8 +164,19 @@ void simulated_annealing_thread_function(shared_info_t<T>& params,
 	return;
 }
 
+
+/**
+  * @brief Mult-thread simulated annealing generator
+  *
+  * Simulated annealing generator
+  *
+  * @param info
+  *    simulated annealing parameters
+  *@returns 
+  *   s-box with target properties 
+  */
 template<typename T>
-std::optional<std::array<uint8_t, 256>> simulated_annealing(simulated_annealing_info_t<T>& info) {
+std::optional<std::array<uint8_t, 256>> simulated_annealing (simulated_annealing_info_t<T>& info) {
 	shared_info_t<T> thread_data;
 	std::random_device rd;
 	
@@ -179,6 +222,6 @@ std::optional<std::array<uint8_t, 256>> simulated_annealing(simulated_annealing_
 	return {};
 }
 	
-};
+}; // namespace sbgen
 
-#endif
+#endif // _SBGEN_SIMULATED_ANNEALING_H_

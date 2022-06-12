@@ -1,0 +1,6 @@
+<map id="Graphical Class Hierarchy" name="Graphical Class Hierarchy">
+<area shape="rect" id="node1" href="$classsbgen_1_1cost__function__data__t.html" title="Base class for cost functions parameters. " alt="" coords="5,71,148,112"/>
+<area shape="rect" id="node2" href="$classsbgen_1_1pcf__function__data__t.html" title="sbgen::pcf_function\l_data_t" alt="" coords="199,5,335,47"/>
+<area shape="rect" id="node3" href="$classsbgen_1_1wcf__function__data__t.html" title="WCF cost function parameters. " alt="" coords="198,71,337,112"/>
+<area shape="rect" id="node4" href="$classsbgen_1_1whs__function__data__t.html" title="WHS cost function parameters. " alt="" coords="196,136,339,177"/>
+</map>

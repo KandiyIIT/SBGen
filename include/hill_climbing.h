@@ -1,3 +1,4 @@
+// Hill climbing implementation
 #ifndef _HILL_CLIMBING_H_
 #define _HILL_CLIMBING_H_
 
@@ -12,23 +13,47 @@
 #include "generator.h"
 
 namespace sbgen {
-	
+
+/**
+ * @brief Hill climbing method parameters
+ **/
 template <typename T>
 struct hill_climbing_info_t : public properties_info_t{
+    // thread count
 	int32_t thread_count;
+    // maximal try count in one thread
 	int32_t try_per_thread;
+    // maximal frozen loops count
 	int32_t max_frozen_count;
+    // visibility of computation process
 	bool is_log_enabled;
 
+    // cost function and cost function data
 	std::unique_ptr< cost_function_data_t> cost_data;
 	std::function< cost_info_t<T>(cost_function_data_t*, std::array<uint8_t, 256>)> cost_function;
-};
+}; // struct hill_climbing_info_t 
 
 
-
+/**
+  * @brief One-thread hiil climbing generator
+  *
+  * Hill Climbing for one thread
+  *
+  * @param params
+  *    shared data
+  * @param info
+  *    hill climbing parameters
+  * @param id
+  *    thread id (used for randomness)
+  *@returns 
+  *   s-box with target properties  in params
+  */
 template<typename T>
-void hill_climbing_thread_function(shared_info_t<T>& params, 
-														hill_climbing_info_t<T>& info, int id) {
+void hill_climbing_thread_function (
+	shared_info_t<T>& params, 
+	hill_climbing_info_t<T>& info, int id
+) 
+{
 	std::random_device rd;
 	unsigned seed;
 	
@@ -111,6 +136,16 @@ void hill_climbing_thread_function(shared_info_t<T>& params,
 	return;
 }
 
+/**
+  * @brief Mult-thread hiil climbing generator
+  *
+  * Hill Climbing generator
+  *
+  * @param info
+  *    hill climbing parameters
+  *@returns 
+  *   s-box with target properties 
+  */
 template<typename T>
 std::optional<std::array<uint8_t, 256>> hill_climbing(hill_climbing_info_t<T>& info) {
 	shared_info_t<T> thread_data;
@@ -158,6 +193,6 @@ std::optional<std::array<uint8_t, 256>> hill_climbing(hill_climbing_info_t<T>& i
 	return {};
 }
 
-};
+}; // _HILL_CLIMBING_H_
 
 #endif // _HILL_CLIMBING_H_

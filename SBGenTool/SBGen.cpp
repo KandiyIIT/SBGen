@@ -12,6 +12,7 @@
 #include "simulated_annealing.h"
 #include "cost_function.h"
 #include "utils.h"
+#include "sbgen_info.h"
 
 
 #define ABORT_MSG(y)\
@@ -91,7 +92,7 @@ void print_help()
 			<< "  --try_per_thread\n"
 			<< "       maximal iterations count in method\n"
 			<< "  --max_frozen_loops\n"
-			<< "       max iterations count without any chages\n"
+			<< "       max iterations count without any chages\n\n"
 		<< "Method parameter list:\n\n"
 			<< "  --method_params\n"
 			<< "       params of method in format --method_params={param1,param2,...,paramN}\n"
@@ -102,7 +103,7 @@ void print_help()
 			<< "       param2: max_inner_loops - maximal inner loop count\n"
 			<< "       param3: initial_temperature -  initial temperature\n"
 			<< "       param4: alpha_parameter -  alpha_parameter\n"
-			<< "       Example: --method_params=\"{10, 10000, 1000, 0.99}\"\n"
+			<< "       Example: --method_params=\"{10, 10000, 1000, 0.99}\"\n\n"
 		<< "Cost function parameter list:\n\n"
 			<< "  --cost_function_params\n"
 			<< "       params of cost function in format --cost_function_params={param1,param2,...,paramN}\n"
@@ -114,15 +115,15 @@ void print_help()
 			<< "       param1: n\n"
 			<< "       Example: --cost_function_params=\"{5}\"\n"
 			<< "  wcf\n"
-			<< "       Has no free options\n"
-			<< "       Please refer to https://github.com/KandiyIIT/SBGen/README.md for more information.\n"
+			<< "       Has no free options\n\n"
 		<< "Target properties:\n\n"
 			<< "  --nonlinearity\n"
 			<< "       target nonlinearity value.\n"
 			<< "  --delta_uniformity\n"
 			<< "       target delta uniformity value.\n"
 			<< "  --algebraic_immunity\n"
-			<< "       target algebraic immunity value.\n";
+			<< "       target algebraic immunity value.\n\n"
+			<< " Please refer to https://github.com/KandiyIIT/SBGen/README.md for more information.\n";
 }
 
 void parse_options(int argc, char **argv, std::map<int, std::string>& options)
@@ -407,6 +408,13 @@ int main(int argc, char** argv)
 	if (parameter != options.end() || argc == 1) 
 	{
 		print_help();
+		return 0;
+	}
+	
+	parameter = options.find(version_flag);
+	if (parameter != options.end()) 
+	{
+		std::cout<<"SBGen "<<SBGEN_VERSION<<std::endl;
 		return 0;
 	}
 	

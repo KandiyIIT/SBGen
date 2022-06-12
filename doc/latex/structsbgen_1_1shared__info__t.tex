@@ -1,0 +1,45 @@
+\hypertarget{structsbgen_1_1shared__info__t}{}\section{sbgen\+:\+:shared\+\_\+info\+\_\+t$<$ T $>$ Struct Template Reference}
+\label{structsbgen_1_1shared__info__t}\index{sbgen\+::shared\+\_\+info\+\_\+t$<$ T $>$@{sbgen\+::shared\+\_\+info\+\_\+t$<$ T $>$}}
+
+
+Holds shared multithread info for generators.  
+
+
+
+
+{\ttfamily \#include $<$generator.\+h$>$}
+
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_a47476ebca87dbb9563fd99a91909954d}\label{structsbgen_1_1shared__info__t_a47476ebca87dbb9563fd99a91909954d}} 
+std\+::array$<$ uint8\+\_\+t, 256 $>$ {\bfseries best\+\_\+sbox}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_ab08fd04b6e0fdedd9c1d85b8f76e20f6}\label{structsbgen_1_1shared__info__t_ab08fd04b6e0fdedd9c1d85b8f76e20f6}} 
+\hyperlink{structsbgen_1_1cost__info__t}{cost\+\_\+info\+\_\+t}$<$ T $>$ {\bfseries best\+\_\+cost}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_a39cfad18af39c2e1ae797dc204dd2372}\label{structsbgen_1_1shared__info__t_a39cfad18af39c2e1ae797dc204dd2372}} 
+std\+::mutex {\bfseries sbox\+\_\+mutex}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_a34b070cb3c1d2fbd608f6b9eae21414e}\label{structsbgen_1_1shared__info__t_a34b070cb3c1d2fbd608f6b9eae21414e}} 
+bool {\bfseries is\+\_\+found}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_a8275bab6b9f5a7357f25cb9d8c5fff55}\label{structsbgen_1_1shared__info__t_a8275bab6b9f5a7357f25cb9d8c5fff55}} 
+int32\+\_\+t {\bfseries frozen\+\_\+count}
+\item 
+\mbox{\Hypertarget{structsbgen_1_1shared__info__t_a40a61021e094b40c63054186e927d023}\label{structsbgen_1_1shared__info__t_a40a61021e094b40c63054186e927d023}} 
+std\+::atomic$<$ uint32\+\_\+t $>$ {\bfseries iteration}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\subsubsection*{template$<$typename T$>$\newline
+struct sbgen\+::shared\+\_\+info\+\_\+t$<$ T $>$}
+
+Holds shared multithread info for generators. 
+
+Contains information about best founded s-\/box and it\textquotesingle{}s cost function value 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+generator.\+h\end{DoxyCompactItemize}
