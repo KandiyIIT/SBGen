@@ -50,7 +50,7 @@ Usage example:
 
 See SBGenTool and tests as a source of examples.
 
-# Instalation #
+# Installation #
 
 The library does not require installation as it contains only header files. We also provide a utility SBGenTool. To compile it, just run the script:
 
