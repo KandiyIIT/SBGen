@@ -155,7 +155,7 @@ std::optional<std::array<uint8_t, 256>> hill_climbing(hill_climbing_info_t<T>& i
 	{
 		info.seed = rd();
 	}
-	
+
 	std::mt19937 gen(info.seed);
 	std::uniform_int_distribution<int> distrib(0, 255);
 	std::vector<std::thread> workers;

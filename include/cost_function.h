@@ -27,6 +27,14 @@ struct cost_info_t {
  * @brief Base class for cost functions parameters
  **/
 class cost_function_data_t {
+public:
+	
+	/**
+	* @brief Cost function name
+	**/
+	virtual std::string name() {
+			return "none";
+	}
 };
 
 
@@ -37,6 +45,13 @@ class whs_function_data_t : public cost_function_data_t {
 public:
 	int32_t r; // r-parameter 
 	int32_t x; // x-parameter
+	
+	/**
+	* @brief Cost function name
+	**/
+	std::string name() override{
+			return "whs";
+	}
 
 	/**
    * @brief Constructor for whs_function_data_t
@@ -102,11 +117,11 @@ cost_info_t<T> whs (
 				part *= val;
 			cost.cost += part;
 
-			if (val > max_spectre)
-				max_spectre = static_cast<int32_t>(val);
+			if (spectre_temp > max_spectre)
+				max_spectre = static_cast<int32_t>(spectre_temp);
 		}
 	}
-
+	//std::cout<<"r="<<data->r<<" x="<<data->x<<std::endl;
 	cost.nonlinearity = 128 - max_spectre / 2;
 
 	return cost;
@@ -117,7 +132,19 @@ cost_info_t<T> whs (
  * @brief WCF cost function parameters
  **/
 class wcf_function_data_t : public cost_function_data_t {
-	~wcf_function_data_t() {};
+public:
+	
+	/**
+	* @brief Cost function name
+	**/
+	std::string name() override{
+			return "wcf";
+	}
+	
+	/**
+	* @brief Destructor for wcf_function_data_t
+	*/
+	virtual ~wcf_function_data_t() {};
 };
 
 /**
@@ -150,7 +177,6 @@ cost_info_t<T> wcf (
 			truth_table[i] = sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
 		}
 
-
 		sbgen::transform_utils::fwht_transform(truth_table, spectre);
 
 		for (int i = 0; i < 256; i++)
@@ -182,8 +208,23 @@ cost_info_t<T> wcf (
 class pcf_function_data_t : public cost_function_data_t {
 public:
 	int32_t level;
+	
+	/**
+	* @brief Cost function name
+	**/
+	std::string name() override{
+			return "pcf";
+	}
         
+        
+	/**
+	* @brief Constructor for pcf_function_data_t
+	*/
 	pcf_function_data_t(int32_t _level) : level(_level) {};
+	
+	/**
+	* @brief Destructor for pcf_function_data_t
+	*/
 	virtual ~pcf_function_data_t() {};
 };
 

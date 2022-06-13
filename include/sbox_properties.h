@@ -2,6 +2,8 @@
 #ifndef  _SBOX_PROPERTIES_H_
 #define _SBOX_PROPERTIES_H_
 
+#include <random>
+
 namespace sbgen {
 
 /**
@@ -167,6 +169,53 @@ public:
 		return rank;
 	}
 	
+	/**
+	* @brief Erase fixed and inverse fixed points in sbox 
+	* 
+	* @param sbox
+	*    matrix (system of linear equations)
+	* @param seed
+	*/
+	static void erase_fixed_points(std::array<uint8_t, 256>& sbox, int32_t seed=0xdeadbeef) 
+	{
+		std::mt19937 gen(seed);
+		std::uniform_int_distribution<int> distrib(0, 255);
+		std::array<uint8_t, 256> sbox_new;
+		uint8_t shift1;
+		uint8_t shift2;
+		uint8_t mask;
+		uint8_t flag;
+	
+		while (1) {
+		
+			shift1 = distrib(gen) % 7 + 1;
+			shift2 = distrib(gen) % 7 + 1;
+
+			mask = distrib(gen);
+
+			for (uint32_t i = 0;i < 256;i++) 
+			{
+				uint8_t new_i = (((i << shift1) & 0xFF) | ((i >> (8 - shift1))));
+				sbox_new[i] = (((sbox[new_i] << shift2) & 0xFF) | ((sbox[new_i] >> (8 - shift2))));
+				sbox_new[i] ^= mask;
+			}
+		
+			flag = 0;
+			for (uint32_t i = 0;i < 256;i++) 
+			{
+				sbox[i] = sbox_new[i];
+				if (sbox[i] == i || sbox[i] == (i ^ 0xFF)) 
+				{
+					flag = 1;
+				}
+			}
+		
+			if (flag == 0)
+				break;
+		}
+		return;
+	}
+	
 	// count of "1" in binary representation on numbers 0 - 255
 	static  constexpr uint8_t one_bits[256] = {
 		0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 
@@ -273,16 +322,40 @@ public:
 class properties {
 public:
 
-  /**
-   * @brief Nonlinearity
-   * 
-   * Compute S-box nonlinearity
-   * 
-   * @param sbox
-   *    target sbox
-   *@returns
-   *   sbox nonlinearity
-   */
+	/**
+	* @brief Is fixed points or inverse fixed points in sbox
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   true - fixed points present, otherwise false
+	*/
+	static int32_t fixed_points(std::array<uint8_t, 256>& sbox)
+	{
+		int32_t flag = 0;
+		for (uint32_t i = 0;i < 256;i++) 
+		{
+			if (sbox[i] == i || sbox[i] == (i ^ 0xFF)) 
+			{
+				flag = 1;
+				break;
+			}
+		}
+		
+		return flag;
+	}
+	
+	
+	/**
+	* @brief Nonlinearity
+	* 
+	* Compute S-box nonlinearity
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   sbox nonlinearity
+	*/
 	static int32_t nonlinearity(std::array<uint8_t, 256>& sbox)
 	{
 		uint8_t     truth_table[256];	

@@ -11,7 +11,7 @@ int test_hill_climbing_with_whs1()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -47,7 +47,7 @@ int test_hill_climbing_with_whs2()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 10;
@@ -78,7 +78,7 @@ int test_hill_climbing_with_whs3()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -128,7 +128,7 @@ int test_hill_climbing_with_wcf1()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -164,7 +164,7 @@ int test_hill_climbing_with_wcf2()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 10;
@@ -195,7 +195,7 @@ int test_hill_climbing_with_wcf3()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -244,7 +244,7 @@ int test_hill_climbing_with_pcf1()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 6;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -280,7 +280,7 @@ int test_hill_climbing_with_pcf2()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 10;
@@ -311,7 +311,7 @@ int test_hill_climbing_with_pcf3()
 
 	sbgen::hill_climbing_info_t<double> info;
 
-	info.thread_count = 2;
+	info.thread_count = 1;
 	info.is_log_enabled = false;
 
 	info.try_per_thread = 1000000;
@@ -357,20 +357,20 @@ int test_hill_climbing_with_pcf3()
 
 int main()
 {
-	int total_test_count = 9;
+	int total_test_count = 6;
 	int accepted_test_count = 0;
 	
 	run_test(test_hill_climbing_with_whs1, "test hill climbing with whs 1\n", accepted_test_count);
 	run_test(test_hill_climbing_with_whs2, "test hill climbing with whs 2\n", accepted_test_count);
-	run_test(test_hill_climbing_with_whs3, "test hill climbing with whs 3\n", accepted_test_count);
+	//run_test(test_hill_climbing_with_whs3, "test hill climbing with whs 3\n", accepted_test_count);
 	
 	run_test(test_hill_climbing_with_wcf1, "test hill climbing with wcf 1\n", accepted_test_count);
 	run_test(test_hill_climbing_with_wcf2, "test hill climbing with wcf 2\n", accepted_test_count);
-	run_test(test_hill_climbing_with_wcf3, "test hill climbing with wcf 3\n", accepted_test_count);
+	//run_test(test_hill_climbing_with_wcf3, "test hill climbing with wcf 3\n", accepted_test_count);
 	
 	run_test(test_hill_climbing_with_pcf1, "test hill climbing with pcf 1\n", accepted_test_count);
 	run_test(test_hill_climbing_with_pcf2, "test hill climbing with pcf 2\n", accepted_test_count);
-	run_test(test_hill_climbing_with_pcf3, "test hill climbing with pcf 3\n", accepted_test_count);
+	//run_test(test_hill_climbing_with_pcf3, "test hill climbing with pcf 3\n", accepted_test_count);
 	
 	printf("%d/%d test passed\n", accepted_test_count, total_test_count);
 	return !(total_test_count==accepted_test_count);
