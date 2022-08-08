@@ -3,6 +3,8 @@
 #define _SBOX_PROPERTIES_H_
 
 #include <random>
+#include <vector>
+#include <set>
 
 namespace sbgen {
 
@@ -478,6 +480,38 @@ public:
 			return 2;
 
 		return 1;
+	}
+	
+	static uint32_t lineary_redudancy(std::array<uint8_t, 256>& sbox)
+	{
+		uint8_t truth_table[256];
+		int spectre[256];
+		std::set<std::string> tags;
+
+		for (int b = 1;b < 256;b++)
+		{
+			for (int i = 0;i < 256;i++)
+				truth_table[i] = transform_utils::one_bits[sbox[i] & b] & 0x01;
+
+			transform_utils::fwht_transform(truth_table, spectre);
+
+			int H[257] = { 0, };
+			std::string tag;
+			for (int i = 0;i < 256;i++)
+			{
+				if (spectre[i] < 0)
+					spectre[i] = -spectre[i];
+
+				H[spectre[i]]++;
+			}
+
+			for (int i = 0;i <= 256;i++)
+				tag += std::to_string(H[i]);
+
+			tags.insert(tag);
+		}
+
+		return (uint32_t)tags.size();
 	}
 	
 }; // class properties
