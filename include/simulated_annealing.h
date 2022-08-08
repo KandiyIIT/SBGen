@@ -111,7 +111,7 @@ void simulated_annealing_thread_function (
 			while (is_good_nl) {
 			
 				if (info.is_log_enabled)
-					std::cout << "cost=" << params.best_cost.cost << "	NL=" << params.best_cost.nonlinearity << "	iteration=" << params.iteration.load() << std::endl;
+					std::cout << "cost=" << params.best_cost.cost << "	NL=" << params.best_cost.nonlinearity << "temperature=" << current_temperature << std::endl;
 			
 				if(!generator_utils::check_additional_properties(static_cast<properties_info_t>(info),new_sbox))
 					break;
@@ -133,7 +133,7 @@ void simulated_annealing_thread_function (
 				accept_in_this_loop = true;
 
 				if (info.is_log_enabled)
-					std::cout << "cost=" << params.best_cost.cost << "	NL=" << params.best_cost.nonlinearity << "	iteration=" << params.iteration.load() << std::endl;
+					std::cout << "cost=" << params.best_cost.cost << "	NL=" << params.best_cost.nonlinearity << "temperature=" << current_temperature << std::endl;
 			} else {
 				double u = dis(gen);
 				if (u < exp(-cost_diff / current_temperature)) {
@@ -145,7 +145,7 @@ void simulated_annealing_thread_function (
 			
 			if(params.frozen_count/info.thread_count >= info.max_frozen_outer_loops) {
 				params.sbox_mutex.unlock();
-				break;
+				return;
 			}
 			
 			if (accept_in_this_loop == false) {
@@ -155,11 +155,9 @@ void simulated_annealing_thread_function (
 			} else
 				params.frozen_count = 0;
 			params.sbox_mutex.unlock();
-			
-			current_temperature *= info.alpha_parameter;
 
 		}
-		
+		current_temperature *= info.alpha_parameter;
 	}
 	return;
 }
