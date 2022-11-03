@@ -12,9 +12,11 @@ Supported cost functions:
 
 The main property for which optimization is performed is non-linearity, but the library also supports a number of other properties:
 
-* Nonlinearity 
-* Delta Uniformity
+* Nonlinearity (or Linear approximation probability)
+* Delta Uniformity (or Differential approximation probability)
 * Algebraic Immunity
+* Strict Avalanche Criterion
+* Output Bit Independence Criterion
 
 Usage example:
 
@@ -42,7 +44,7 @@ Usage example:
 	info.cost_data.reset(new sbgen::whs_function_data_t(12, 0));
 
 	//s-box stored in table format in std::optional<std::array<uint8_t,256>>
-	auto sbox = sbox::hill_climbing<double>(info);
+	auto sbox = sbgen::hill_climbing<double>(info);
 
 	if (sbox.has_value())
 		PRINT_SBOX(sbox.value());

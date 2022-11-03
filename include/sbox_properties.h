@@ -5,6 +5,7 @@
 #include <random>
 #include <vector>
 #include <set>
+#include <cmath>
 
 namespace sbgen {
 
@@ -317,12 +318,144 @@ public:
 	} while(false);
 
 /**
+ * @brief Avalanche criteria data
+ *
+ * Contains info about avalance statistics
+ **/
+typedef struct _avalanche_criteria_data {
+	double min;
+	double max;
+	double average;
+	double deviation;
+} avalanche_criterion_data;
+
+/**
  * @brief S-box properties
  *
  * Contains set of functions that compute s-box properties
  **/
 class properties {
 public:
+
+	/**
+	* @brief statistics about avalanche effect
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   statistics about avalanche effect in struct avalanche_criterion_data
+	*/
+	static avalanche_criterion_data avalanche_effect(std::array<uint8_t, 256>& sbox)
+	{
+		avalanche_criterion_data info {1.0, 0.0, 0.0, 0.0};
+		// pr[i,j] = Pr[j-th output bit of changed | i-th input bit chg.]
+		std::array<std::array<double, 8>, 8> pr;
+		std::array<double, 8> avg;
+
+		for (uint32_t i = 0; i < 8; i++)
+		{
+			avg[i] = 0;
+			for (uint32_t j = 0; j < 8; j++)
+			{
+				double probability = 0;
+				for (uint32_t k = 0; k < 256; k++)
+				{
+					uint8_t bit_before = transform_utils::bits[sbox[k]][j];
+					uint8_t bit_after = transform_utils::bits[sbox[k^(1<<i)]][j];
+					probability += bit_before^bit_after;
+				}
+
+				probability/=256;
+				pr[i][j] = probability;
+
+				if (probability > info.max)
+					info.max = probability;
+				if (probability < info.min)
+					info.min = probability;
+				avg[i] += probability;
+			}
+			avg[i]/=8;
+		}
+
+		for (uint32_t i = 0; i < 8; i++)
+		{
+			info.average += avg[i];
+			for (uint32_t j = 0; j < 8; j++)
+			{
+				info.deviation += (pr[i][j]-avg[i])*(pr[i][j]-avg[i]);
+			}
+		}
+		info.average /= 8;
+		info.deviation /= 64;
+		info.deviation = sqrt(info.deviation);
+		return info;
+	}
+
+	/**
+	* @brief calculate Output Bit Independence Criterion 
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   Output Bit Independence Criterion (number in [0,1])
+	*/
+	static double bit_independence_criterion(std::array<uint8_t, 256>& sbox)
+	{
+		// pr[i,j,k] = j-th output bit of changed | i-th input bit chg. on val k
+		std::array<std::array<std::array<uint8_t, 256>, 8>, 8> pr;
+		std::array<std::array<double, 8>, 8> avg;
+		double bic = 0;
+
+		for (uint32_t i = 0; i < 8; i++)
+		{
+			for (uint32_t j = 0; j < 8; j++)
+			{
+				avg[i][j] = 0;
+				for (uint32_t k = 0; k < 256; k++)
+				{
+					uint8_t bit_before = transform_utils::bits[sbox[k]][j];
+					uint8_t bit_after = transform_utils::bits[sbox[k^(1<<i)]][j];
+
+					pr[i][j][k] = bit_before^bit_after;
+					avg[i][j] += bit_before^bit_after;
+				}
+
+				avg[i][j]/=256;
+			}
+		}
+
+
+	for (uint32_t j = 0; j < 8; j++)
+	{
+		for (uint32_t k = j+1; k < 8; k++)
+		{
+			for (uint32_t i = 0; i < 8; i++)
+			{
+				double deviation_i = 0;
+				double deviation_j = 0;
+				double sum = 0;
+				for (uint32_t z = 0; z < 256; z++)
+				{
+					double tmp_i =(pr[i][j][z] - avg[i][j]);
+					double tmp_j =(pr[i][k][z] - avg[i][k]);
+
+					deviation_i += tmp_i*tmp_i;
+					deviation_j += tmp_j*tmp_j;
+					sum += tmp_i*tmp_j;
+				}
+
+				double correlation = sum/sqrt(deviation_i*deviation_j);
+
+				if (correlation < 0)
+					correlation = -correlation;
+				if (correlation > bic)
+					bic = correlation;
+			}
+		}
+	}
+
+		return bic;
+	}
 
 	/**
 	* @brief Is fixed points or inverse fixed points in sbox
