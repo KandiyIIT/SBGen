@@ -320,7 +320,7 @@ public:
 /**
  * @brief Avalanche criteria data
  *
- * Contains info about avalance statistics
+ * Contains info about avalanche statistics
  **/
 typedef struct _avalanche_criteria_data {
 	double min;
@@ -425,34 +425,34 @@ public:
 		}
 
 
-	for (uint32_t j = 0; j < 8; j++)
-	{
-		for (uint32_t k = j+1; k < 8; k++)
+		for (uint32_t j = 0; j < 8; j++)
 		{
-			for (uint32_t i = 0; i < 8; i++)
+			for (uint32_t k = j+1; k < 8; k++)
 			{
-				double deviation_i = 0;
-				double deviation_j = 0;
-				double sum = 0;
-				for (uint32_t z = 0; z < 256; z++)
+				for (uint32_t i = 0; i < 8; i++)
 				{
-					double tmp_i =(pr[i][j][z] - avg[i][j]);
-					double tmp_j =(pr[i][k][z] - avg[i][k]);
+					double deviation_i = 0;
+					double deviation_j = 0;
+					double sum = 0;
+					for (uint32_t z = 0; z < 256; z++)
+					{
+						double tmp_i =(pr[i][j][z] - avg[i][j]);
+						double tmp_j =(pr[i][k][z] - avg[i][k]);
 
-					deviation_i += tmp_i*tmp_i;
-					deviation_j += tmp_j*tmp_j;
-					sum += tmp_i*tmp_j;
+						deviation_i += tmp_i*tmp_i;
+						deviation_j += tmp_j*tmp_j;
+						sum += tmp_i*tmp_j;
+					}
+
+					double correlation = sum/sqrt(deviation_i*deviation_j);
+
+					if (correlation < 0)
+						correlation = -correlation;
+					if (correlation > bic)
+						bic = correlation;
 				}
-
-				double correlation = sum/sqrt(deviation_i*deviation_j);
-
-				if (correlation < 0)
-					correlation = -correlation;
-				if (correlation > bic)
-					bic = correlation;
 			}
 		}
-	}
 
 		return bic;
 	}
