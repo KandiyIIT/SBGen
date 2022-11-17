@@ -26,7 +26,7 @@ namespace sbgen {
 
 	template <typename T>
 	using population_t = std::priority_queue<sbox_info<T>, 
-		std::vector<sbox_info<T>>, genetic_comparator>;
+		std::vector<sbox_info<T>>, genetic_comparator<T>>;
 
 		template <typename T>
 	using selection_method_t =
@@ -158,7 +158,7 @@ namespace sbgen {
 		}
 
 		template <typename T>
-		static void rank_selection(population_t& population, 
+		static void roulette_wheel_selection(population_t& population, 
 			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
 		{
 			int total_selected_count = 0;
