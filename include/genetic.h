@@ -8,6 +8,8 @@
 #include <random>
 #include <vector>
 #include <iostream>
+#include <mutex>
+#include <atomic>
 
 #include "cost_function.h"
 #include "generator.h"
@@ -62,7 +64,7 @@ struct genetic_shared_info_t {
 	sbox_info<T> best_sbox;
 	std::mutex sbox_mutex;
 	std::atomic<bool> is_sbox_found;
-}
+};
 
 /**
   * @brief One-thread hiil climbing generator
@@ -81,21 +83,11 @@ struct genetic_shared_info_t {
 template<typename T>
 void genetic_thread_function (
 	genetic_shared_info_t<T>& params, 
-	genetic_info_t<T>& info, int id
+	genetic_info_t<T>& info
 ) 
 {
 	std::random_device rd;
-	unsigned seed;
-	
-	if (info.use_random_seed) 
-	{
-		seed = rd();
-	} else 
-	{
-		seed = info.seed^id;
-	}
-		
-	std::mt19937 gen(seed);
+	std::mt19937 gen(rd());
 	std::uniform_int_distribution<int> distrib(0, 255);
 	//std::array<uint8_t, 256> new_sbox;
 
@@ -122,40 +114,46 @@ void genetic_thread_function (
 		{
 			sbox_info<T> mutant = successor;
 
-			int32_t pos_1 = distrib(gen);
-			int32_t pos_2 = distrib(gen);
-			std::swap(mutant[pos_1], mutant[pos_2]);
-			auto new_cost = info.cost_function(info.cost_data.get(), mutant);
+			int32_t pos_1 = 0;
+			int32_t pos_2 = 0;
+			while (pos_1 == pos_2)
+			{
+				pos_1 = distrib(gen);
+				pos_2 = distrib(gen);
+			}
+			std::swap(mutant.sbox[pos_1], mutant.sbox[pos_2]);
+			auto new_cost = info.cost_function(info.cost_data.get(), mutant.sbox);
+			mutant.cost = new_cost;
 
 			bool is_good_nl = new_cost.nonlinearity >=
 				info.target_properties[SBGEN_NONLINEARITY];
 			while (is_good_nl)
 			{
-				if (info.is_log_enabled)
-					std::cout << "cost=" 
-					<< params.best_cost.cost 
+				//if (info.is_log_enabled)
+				//{
+					/*std::cout << "cost=" 
+					<< params.best_sbox.cost.cost
 					<< "	NL=" 
-					<< params.best_cost.nonlinearity 
-					<< "	iteration=" 
-					<< params.iteration.load() << std::endl;
+					<< params.best_sbox.cost.nonlinearity 
+					<< std::endl;*/
+				//}
 			
 				if(!generator_utils::check_additional_properties(
-					static_cast<properties_info_t>(info),mutant))
+					static_cast<properties_info_t>(info),mutant.sbox))
 				{
 					break;
 				}
 				params.sbox_mutex.lock();
 				params.best_sbox = mutant;
-				params.best_cost = new_cost;
-				params.is_found = true;
+				params.best_sbox.cost = new_cost;
+				params.is_sbox_found = true;
 				params.sbox_mutex.unlock();
 				return;
 			}
+			params.population_mutex.lock();
+			params.population.push(mutant);
+			params.population_mutex.unlock();
 		} // for (i)
-
-		params.population_mutex.lock();
-		params.population.push(mutant);
-		params.population_mutex.unlock();
 	}; // while(1)
 
 	return;
@@ -176,13 +174,8 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 {
 	genetic_shared_info_t<T> thread_data;
 	std::random_device rd;
-	
-	if (info.use_random_seed) 
-	{
-		info.seed = rd();
-	}
 
-	std::mt19937 gen(info.seed);
+	std::mt19937 gen(rd());
 	std::uniform_int_distribution<int> distrib(0, 255);
 	std::vector<std::thread> workers;
 	population_t<T> population(info.comparator);
@@ -191,12 +184,8 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 	std::atomic<int> population_count(info.initial_population_count);
 
 
-	for(int i=0;i< generator_data.thread_count;i++) {
-		workers.push_back(std::thread([
-			&population_count, 
-			&population_mutex, 
-			&population,
-			info]() 
+	for(int i=0;i< info.thread_count;i++) {
+		workers.push_back(std::thread([&]
 			{
 				sbox_info<T> sbox;
 				std::random_device rd;
@@ -212,7 +201,7 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 					for (int i = 255; i > 0; i--) 
 					{
 						int j = distrib(gen) % i;
-						std::swap(sbox[i], sbox.sbox[j]);
+						std::swap(sbox.sbox[i], sbox.sbox[j]);
 					}
 					sbox.cost = info.cost_function(
 						info.cost_data.get(), sbox.sbox);
@@ -220,7 +209,7 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 					population_mutex.unlock();
 					population_count.fetch_sub(1);
 				}
-        };));
+        }));
 	}
 
 	for (auto& thread : workers) {
@@ -231,10 +220,21 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 
 	for (int i = 0; i < info.iterations_count; i++)
 	{
+		thread_data.best_sbox = population.top();
 		if (info.is_log_enabled)
 		{
-			if (i % 100 == 0) 
+			if (i % 100 == 0)
+			{
 				std::cout << "Iteration " << i << std::endl;
+				if (info.is_log_enabled)
+				{
+					std::cout << "cost=" 
+					<< thread_data.best_sbox.cost.cost
+					<< "	NL=" 
+					<< thread_data.best_sbox.cost.nonlinearity 
+					<< std::endl;
+				}
+			}
 		}
 		thread_data.population = empty_population;
 		info.selection_method(population, thread_data.successors,
@@ -243,7 +243,7 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 		// TODO paralelize crossover
 		if (info.use_crossover == true)
 		{
-			std::uniform_int_distribution<int> popul_distr(0, 
+			std::uniform_int_distribution<int> popul_distr(0,
 				thread_data.successors.size()-1);
 			sbox_info<T> sb;
 			
@@ -261,10 +261,10 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 				for (int k = 0; k < info.child_per_parent; k++)
 				{
 					sb.sbox = info.crossover_method(
-						thread_data.successors[pos_1],
-						thread_data.successors[pos_2]);
+						thread_data.successors[pos_1].sbox,
+						thread_data.successors[pos_2].sbox);
 					sb.cost = info.cost_function(
-						info.cost_data.get(), sbox.sbox);
+						info.cost_data.get(), sb.sbox);
 					thread_data.successors.push_back(sb);
 				}
 			}
@@ -274,7 +274,18 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 		{
 			if (i % 100 == 0)
 			{
-				
+				std::cout<<"successors size: "
+					<<thread_data.successors.size()<<std::endl;
+				for (size_t z=0; z < thread_data.successors.size(); z++)
+				{
+					if (z > 10)
+						break;
+				std::cout << "(" 
+				<< thread_data.successors[z].cost.cost
+				<< ", " 
+				<< thread_data.successors[z].cost.nonlinearity 
+				<< ")"<< std::endl;
+				}
 			}
 		}
 
@@ -282,8 +293,8 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 			workers.push_back(
 				std::thread(
 					&genetic_thread_function<T>, 
-					this,std::ref(info), 
-					std::ref(thread_data)
+					std::ref(thread_data), 
+					std::ref(info)
 				)
 			);
 		}
@@ -296,10 +307,10 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 		workers.clear();
 
 		if (thread_data.is_sbox_found == true) {
-			return shared_data.best_sbox;
+			return thread_data.best_sbox.sbox;
 		}
 
-		population.swap(thread_data.population);
+		population = thread_data.population;
 	}
 
 	return {};

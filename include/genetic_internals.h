@@ -2,6 +2,12 @@
 #ifndef _SBGEN_GENETIC_DETAILS_
 #define _SBGEN_GENETIC_DETAILS_
 
+#include <queue>
+#include <vector>
+#include <array>
+#include <functional>
+#include <random>
+
 namespace sbgen {
 
 	template <typename T>
@@ -13,13 +19,27 @@ namespace sbgen {
 	template <typename T>
 	using comparator_t = 
 		std::function<bool(sbox_info<T>&, sbox_info<T>&)>;
+        
+	class comparators {
+	public:
+		template <typename T>
+		static bool less(sbox_info<T>& a, sbox_info<T>& b) {
+			return (a.cost.cost > b.cost.cost);
+		}
+
+		template <typename T>
+		static bool less_nl(sbox_info<T>& a, sbox_info<T>& b) {
+			return (a.cost.cost > b.cost.cost) &&
+			(a.cost.nonlinearity >= b.cost.nonlinearity);
+		}
+	};
 
 	template <typename T>
 	struct genetic_comparator {
 	public:
-		comparator_t comparator;
+		comparator_t<T> comparator = comparators::less<T>;
 
-		bool operator()(sbox_info<T>&, sbox_info<T>&) {
+		bool operator()(sbox_info<T>& a, sbox_info<T>& b) {
 			return comparator(a,b);
 		}
 	}; // struct genetic_comparator
@@ -28,65 +48,18 @@ namespace sbgen {
 	using population_t = std::priority_queue<sbox_info<T>, 
 		std::vector<sbox_info<T>>, genetic_comparator<T>>;
 
-		template <typename T>
+    template <typename T>
 	using selection_method_t =
-		std::function<void(population_t<T>&, std::vector<sbox_info<T>>,int)>;
+		std::function<void(population_t<T>&, std::vector<sbox_info<T>>&,int)>;
 
 	using crossover_method_t = 
 		std::function<std::array<uint8_t, 256>(
 			std::array<uint8_t, 256>&, std::array<uint8_t, 256>&)>;
-			
-	/**
-	* @brief 
-	*
-	* Contains information about best founded s-box and it's cost function value
-	**/
-	template <typename T>
-	struct genetic_shared_info_t {
-		std::vector<sbox_info<T>> successors;
-		std::mutex successors_mutex;
-		population_t<T> population;
-		std::mutex population_mutex;
-		// Best S-box
-		std::array<uint8_t, 256> best_sbox;
-		// Cost of best S-box
-		cost_info_t<T> best_cost;
-		// Mutex for acces to shared_info_t fields
-		std::mutex sbox_mutex;
-		// Found s-box?
-		bool is_found;
-	}; // struct genetic_shared_info_t 
-
-	class comparators {
-		template <typename T>
-		static bool less(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost < b.cost);
-		}
-
-		template <typename T>
-		static bool greater(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost > b.cost);
-		}
-
-		template <typename T>
-		static bool leq(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost <= b.cost);
-		}
-
-		template <typename T>
-		static bool geq(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost >= b.cost);
-		}
-
-		template <typename T>
-		static bool less_nl(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost < b.cost) && (a.nonlinearity <= b.nonlinearity);
-		}
-	};
 
 	class selectors {
+	public:
 		template <typename T>
-		static void basic_selection(population_t& population, 
+		static void basic_selection(population_t<T>& population, 
 			std::vector<sbox_info<T>>& new_population, int child_per_parent) {
 			T cost_prev;
 
@@ -99,17 +72,17 @@ namespace sbgen {
 				population.pop();
 
 				new_population.push_back(s);
-				cost_prev = s.cost;
+				cost_prev = s.cost.cost;
 
 				while(!population.empty() &&  
-					population.top().cost == cost_prev) {
+					population.top().cost.cost == cost_prev) {
 					population.pop();
 				}
 			}
 		}
 
 		template <typename T>
-		static void rank_selection(population_t& population, 
+		static void rank_selection(population_t<T>& population, 
 			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
 		{
 			int total_selected_count = 0;
@@ -123,10 +96,10 @@ namespace sbgen {
 			std::vector<sbox_info<T>> res;
 			while (!population.empty()) {
 				sbox_info<T> s = population.top();
-				cost_prev = s.cost;
+				cost_prev = s.cost.cost;
 				res.push_back(s);
 				while(!population.empty() &&  
-					population.top().cost == cost_prev) {
+					population.top().cost.cost == cost_prev) {
 					population.pop();
 				}
 			}
@@ -158,7 +131,7 @@ namespace sbgen {
 		}
 
 		template <typename T>
-		static void roulette_wheel_selection(population_t& population, 
+		static void roulette_wheel_selection(population_t<T>& population, 
 			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
 		{
 			int total_selected_count = 0;
@@ -173,7 +146,7 @@ namespace sbgen {
 			std::vector<sbox_info<T>> res;
 			while (!population.empty()) {
 				sbox_info<T> s = population.top();
-				cost_prev = s.cost;
+				cost_prev = s.cost.cost;
 				res.push_back(s);
 				while(!population.empty() &&  
 					population.top().cost == cost_prev) {
@@ -208,6 +181,7 @@ namespace sbgen {
 	}; // class selectors
 
 	class cossovers {
+	public:
 		template <typename T>
 		std::array<uint8_t, 256> cycle(std::array<uint8_t, 256>& a,
 										std::array<uint8_t, 256>& b)
@@ -224,12 +198,12 @@ namespace sbgen {
 			int cycle_start = dist(gen);
 			int current_pos = cycle_start;
 			do  {
-				res[current_pos] = parent1[current_pos];
+				res[current_pos] = a[current_pos];
 				index[current_pos] = true;
-				int current_val = parent2[current_pos];
+				int current_val = b[current_pos];
 
 				for (int i = 0;i < 256;i++) {
-					if (parent1[i] == current_val) {
+					if (a[i] == current_val) {
 						current_pos = i;
 						break;
 					}
@@ -238,7 +212,7 @@ namespace sbgen {
 
 			for (int i = 0;i < 256;i++) {
 				if (index[i] == false)
-					res[i] = parent2[i];
+					res[i] = b[i];
 			}
 			return std::move(res);
 		}
@@ -252,7 +226,7 @@ namespace sbgen {
 
 			std::array<bool, 256> index;
 			std::array<bool, 256> index_values;
-			std::array<uint8_t, 256> res(false);
+			std::array<uint8_t, 256> res;
 			for (int i = 0;i < 256;i++) {
 				index[i] = false;
 				index_values[i] = false;
@@ -268,20 +242,20 @@ namespace sbgen {
 			}
 
 			for (int i = start_pos;i <= end_pos;i++) {
-				res[i] = parent1[i];
+				res[i] = a[i];
 				index[i] = true;
-				index_values[parent1[i]] = true;
+				index_values[a[i]] = true;
 			}
 
 			for (int i = 0;i < 256;i++) {
 				if (index[i] == true)
 					continue;
-				int value = parent2[i];
+				int value = b[i];
 
 				while (index_values[value] == true) {
 					for (int j = 0;j < 256;j++) {
-						if (parent1[j] == value) {
-							value = parent2[j];
+						if (a[j] == value) {
+							value = b[j];
 							break;
 						}
 					}

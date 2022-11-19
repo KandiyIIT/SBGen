@@ -12,7 +12,9 @@ test_hill_climbing:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) test_hill_climbing.cpp  -o $@
 test_simulated_annealing:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) test_simulated_annealing.cpp  -o $@
-	
+test_genetic:
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) test_genetic.cpp  -o $@
+
 clean:
 	rm $(TESTS)
 run:
