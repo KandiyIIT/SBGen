@@ -42,7 +42,7 @@ struct genetic_info_t : public properties_info_t{
 	bool use_crossover;
 
 
-    // cost function and cost function data
+	// cost function and cost function data
 	std::unique_ptr< cost_function_data_t> cost_data;
 	std::function< cost_info_t<T>(cost_function_data_t*, std::array<uint8_t, 256>)> cost_function;
 	genetic_comparator<T> comparator;
@@ -129,14 +129,14 @@ void genetic_thread_function (
 				info.target_properties[SBGEN_NONLINEARITY];
 			while (is_good_nl)
 			{
-				//if (info.is_log_enabled)
-				//{
-					/*std::cout << "cost=" 
+				if (info.is_log_enabled)
+				{
+					std::cout << "new best cost=" 
 					<< params.best_sbox.cost.cost
 					<< "	NL=" 
 					<< params.best_sbox.cost.nonlinearity 
-					<< std::endl;*/
-				//}
+					<< std::endl;
+				}
 			
 				if(!generator_utils::check_additional_properties(
 					static_cast<properties_info_t>(info),mutant.sbox))
@@ -147,6 +147,13 @@ void genetic_thread_function (
 				params.best_sbox = mutant;
 				params.best_sbox.cost = new_cost;
 				params.is_sbox_found = true;
+				if (info.is_log_enabled)
+				{
+					std::cout << "found"
+					<< "	NL=" 
+					<< params.best_sbox.cost.nonlinearity 
+					<< std::endl;
+				}
 				params.sbox_mutex.unlock();
 				return;
 			}
@@ -182,7 +189,7 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 	population_t<T> empty_population(info.comparator);
 	std::mutex population_mutex;
 	std::atomic<int> population_count(info.initial_population_count);
-
+	thread_data.is_sbox_found = false; 
 
 	for(int i=0;i< info.thread_count;i++) {
 		workers.push_back(std::thread([&]
@@ -203,6 +210,12 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 						int j = distrib(gen) % i;
 						std::swap(sbox.sbox[i], sbox.sbox[j]);
 					}
+					if (properties::is_bijective(sbox.sbox) == false)
+					{
+						printf("ERROR 3\n");
+						for(;;);
+					}
+					
 					sbox.cost = info.cost_function(
 						info.cost_data.get(), sbox.sbox);
 					population.push(sbox);
@@ -254,12 +267,18 @@ std::optional<std::array<uint8_t, 256>> genetic(genetic_info_t<T>& info)
 
 				while (pos_1 == pos_2)
 				{
-					pos_1 = distrib(gen);
-					pos_2 = distrib(gen);
+					pos_1 = popul_distr(gen);
+					pos_2 = popul_distr(gen);
 				}
 
 				for (int k = 0; k < info.child_per_parent; k++)
 				{
+					if (properties::is_bijective(thread_data.successors[pos_1].sbox) == false ||
+					properties::is_bijective(thread_data.successors[pos_2].sbox) == false)
+					{
+						printf("ERROR 1!\n");
+						for(;;);
+					}
 					sb.sbox = info.crossover_method(
 						thread_data.successors[pos_1].sbox,
 						thread_data.successors[pos_2].sbox);

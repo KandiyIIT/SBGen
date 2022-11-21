@@ -646,7 +646,27 @@ public:
 
 		return (uint32_t)tags.size();
 	}
-	
+
+	static bool is_bijective(std::array<uint8_t, 256>& sbox)
+	{
+		std::array<uint8_t, 256> count;
+		for (int i = 0; i < 256; i++)
+		{
+			count[i] = 0;
+		}
+
+		for (int i = 0; i < 256; i++)
+		{
+			count[sbox[i]]++;
+		}
+
+		for (int i = 0; i < 256; i++)
+		{
+			if (count[i] != 1)
+				return false;
+		}
+		return true;
+	}
 }; // class properties
 
     

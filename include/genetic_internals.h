@@ -29,8 +29,11 @@ namespace sbgen {
 
 		template <typename T>
 		static bool less_nl(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost.cost > b.cost.cost) &&
-			(a.cost.nonlinearity >= b.cost.nonlinearity);
+			if (a.cost.nonlinearity > b.cost.nonlinearity)
+				return false;
+			if (a.cost.nonlinearity < b.cost.nonlinearity)
+				return true;
+			return (a.cost.cost > b.cost.cost);
 		}
 	};
 
@@ -104,8 +107,8 @@ namespace sbgen {
 				}
 			}
 			std::uniform_int_distribution<int> distrib(0, res.size()-1);
-			
-			if (child_per_parent > res.size())
+
+			if (child_per_parent >= (int32_t) res.size())
 			{
 				new_population = res;
 				return;
@@ -117,11 +120,11 @@ namespace sbgen {
 				if (index[pos] == true)
 					continue;
 
-				if (rdistrib(gen) < ((2.0 * pos) / (
+				if (rdistrib(gen) < ((2.0 * (res.size()-1+pos)) / (
 					child_per_parent * (child_per_parent + 1.0)))) 
 				{
 					index[pos] = true;
-					new_population.push_back(res[res.size()-pos-1]);
+					new_population.push_back(res[pos]);
 
 					total_selected_count++;
 				}
@@ -147,15 +150,16 @@ namespace sbgen {
 			while (!population.empty()) {
 				sbox_info<T> s = population.top();
 				cost_prev = s.cost.cost;
+				Z += s.cost.cost;
 				res.push_back(s);
 				while(!population.empty() &&  
-					population.top().cost == cost_prev) {
+					population.top().cost.cost == cost_prev) {
 					population.pop();
 				}
 			}
 			std::uniform_int_distribution<int> distrib(0, res.size() - 1);
 
-			if (child_per_parent > res.size())
+			if (child_per_parent >= (int) res.size())
 			{
 				new_population = res;
 				return;
@@ -167,9 +171,9 @@ namespace sbgen {
 				if (index[pos] == true)
 					continue;
 
-				if (rdistrib(gen) < ((double)res[pos].get_cost()/Z)) {
+				if (rdistrib(gen) < ((double)res[pos].cost.cost/Z)) {
 					index[pos] = true;
-					new_population.push_back(res[res.size() - pos - 1]);
+					new_population.push_back(res[pos]);
 
 					total_selected_count++;
 				}
@@ -177,13 +181,114 @@ namespace sbgen {
 
 			return;
 		}
-		
+
+		template <typename T>
+		static void rank_sequential_selection(population_t<T>& population, 
+			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
+		{
+			int total_selected_count = 0;
+			T cost_prev;
+			std::random_device rd;
+			std::mt19937 gen(rd());
+
+			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
+			std::vector<bool> index(population.size(),false);
+
+			std::vector<sbox_info<T>> res;
+			while (!population.empty()) {
+				sbox_info<T> s = population.top();
+				cost_prev = s.cost.cost;
+				res.push_back(s);
+				while(!population.empty() &&  
+					population.top().cost.cost == cost_prev) {
+					population.pop();
+				}
+			}
+			std::uniform_int_distribution<int> distrib(0, res.size()-1);
+
+			if (child_per_parent >= (int32_t) res.size())
+			{
+				new_population = res;
+				return;
+			}
+
+			int i = 0;
+			while (total_selected_count < child_per_parent) 
+			{
+				int pos = i % res.size();// distrib(gen);
+				if (index[pos] == true)
+					continue;
+
+				if (rdistrib(gen) < (1 - (2.0 * (pos)) / (
+					child_per_parent * (child_per_parent + 1.0)))) 
+				{
+					index[pos] = true;
+					new_population.push_back(res[pos]);
+
+					total_selected_count++;
+				}
+				i++;
+			}
+
+			return;
+		}
+
+		template <typename T>
+		static void roulette_wheel_sequential_selection(population_t<T>& population, 
+			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
+		{
+			int total_selected_count = 0;
+			T Z = 0;
+			T cost_prev;
+			std::random_device rd;
+			std::mt19937 gen(rd());
+
+			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
+			std::vector<bool> index(population.size(), false);
+
+			std::vector<sbox_info<T>> res;
+			while (!population.empty()) {
+				sbox_info<T> s = population.top();
+				cost_prev = s.cost.cost;
+				Z += s.cost.cost;
+				res.push_back(s);
+				while(!population.empty() &&  
+					population.top().cost.cost == cost_prev) {
+					population.pop();
+				}
+			}
+			std::uniform_int_distribution<int> distrib(0, res.size() - 1);
+
+			if (child_per_parent >= (int) res.size())
+			{
+				new_population = res;
+				return;
+			}
+
+			int i = 0;
+			while (total_selected_count < child_per_parent)
+			{
+				int pos = i % res.size(); // distrib(gen);
+				i++;
+				//printf("%f\n", res[pos].cost.cost/Z);
+				if (index[pos] == true)
+					continue;
+				//printf("test %d %d\n", i, total_selected_count);
+				if (rdistrib(gen) < ((double)(1 - res[pos].cost.cost/Z))) {
+					index[pos] = true;
+					new_population.push_back(res[pos]);
+
+					total_selected_count++;
+				}
+			}
+
+			return;
+		}
 	}; // class selectors
 
 	class cossovers {
 	public:
-		template <typename T>
-		std::array<uint8_t, 256> cycle(std::array<uint8_t, 256>& a,
+		static std::array<uint8_t, 256> cycle(std::array<uint8_t, 256>& a,
 										std::array<uint8_t, 256>& b)
 		{
 			std::random_device rd;
@@ -217,7 +322,7 @@ namespace sbgen {
 			return std::move(res);
 		}
 
-		std::array<uint8_t, 256> pmx(std::array<uint8_t, 256>& a,
+		static std::array<uint8_t, 256> pmx(std::array<uint8_t, 256>& a,
 						std::array<uint8_t, 256>& b)
 		{
 			std::random_device rd;
@@ -227,14 +332,23 @@ namespace sbgen {
 			std::array<bool, 256> index;
 			std::array<bool, 256> index_values;
 			std::array<uint8_t, 256> res;
-			for (int i = 0;i < 256;i++) {
+			for (int i = 0;i < 256;i++)
+			{
 				index[i] = false;
 				index_values[i] = false;
 			}
+			
+			//if (properties::is_bijective(a) == false ||
+			//	properties::is_bijective(b) == false)
+			//{
+			//	printf("ERROR!\n");
+			//	for(;;);
+			//}
 
 			int start_pos = 0; 
 			int end_pos = 0;
-			while (start_pos == end_pos) {
+			while (start_pos == end_pos)
+			{
 				start_pos = dist(gen)%256;
 				end_pos = dist(gen)%256;
 				if (start_pos > end_pos)
@@ -252,9 +366,12 @@ namespace sbgen {
 					continue;
 				int value = b[i];
 
-				while (index_values[value] == true) {
-					for (int j = 0;j < 256;j++) {
-						if (a[j] == value) {
+				while (index_values[value] == true) 
+				{
+					for (int j = 0;j < 256;j++) 
+					{
+						if (a[j] == value) 
+						{
 							value = b[j];
 							break;
 						}
