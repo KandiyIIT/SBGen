@@ -19,18 +19,18 @@ namespace sbgen {
 class transform_utils {
 public:
 	
-  /**
-   * @brief Walsh-Hadamard transform of boolean function
-   *
-   * Compute Walsh-Hadamard transform and return spectre via parameter
-   *
-   * @param truth_table
-   *    thruth table of boolean function
-   * @param spectre
-   *    output param. Spectre of boolean function
-   *@returns
-   *   spectre of boolean function via second parameter
-   */
+	/**
+	* @brief Walsh-Hadamard transform of boolean function
+	*
+	* Compute Walsh-Hadamard transform and return spectre via parameter
+	*
+	* @param truth_table
+	*    thruth table of boolean function
+	* @param spectre
+	*    output param. Spectre of boolean function
+	*@returns
+	*   spectre of boolean function via second parameter
+	*/
 	static void fwht_transform
 	(
 		uint8_t* truth_table, 
