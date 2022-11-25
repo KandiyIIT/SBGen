@@ -37,6 +37,8 @@ public:
 	}
 };
 
+using cost_function_t = std::function< cost_info_t<T>(
+	cost_function_data_t*, sbox_t)>;
 
 /**
  * @brief WHS cost function parameters

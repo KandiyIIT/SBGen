@@ -1,4 +1,4 @@
-// Internals of Genetic  algorithms
+// Internals of Genetic algorithms
 #ifndef _SBGEN_GENETIC_DETAILS_
 #define _SBGEN_GENETIC_DETAILS_
 
@@ -8,25 +8,50 @@
 #include <functional>
 #include <random>
 
-namespace sbgen {
+#include "cost_function.h"
+#include "sbox_properties.h"
 
+namespace sbgen 
+{
+	/**
+	 * @brief info about s-box in population
+	 * */
 	template <typename T>
 	struct sbox_info {
-		std::array<uint8_t, 256> sbox;
+		sbox_t sbox;
 		cost_info_t<T> cost;
 	}; // struct sbox_info
-	
+
+	/**
+	 * @brief comparator function definition for population
+	 * */
 	template <typename T>
 	using comparator_t = 
 		std::function<bool(sbox_info<T>&, sbox_info<T>&)>;
-        
+
+	/**
+	 * @brief comparators
+	 * */
 	class comparators {
 	public:
+		/**
+		* @brief less - ordering from smallest to largest
+		* @param a - first s-box
+		* @param b - second s-box
+		* @return true - need exchange s-boxes, other - false
+		* */
 		template <typename T>
 		static bool less(sbox_info<T>& a, sbox_info<T>& b) {
 			return (a.cost.cost > b.cost.cost);
 		}
 
+		/**
+		* @brief less_nl - ordering from smallest to largest
+		* taking into account the nonlinearity
+		* @param a - first s-box
+		* @param b - second s-box
+		* @return true - need exchange s-boxes, other - false
+		* */
 		template <typename T>
 		static bool less_nl(sbox_info<T>& a, sbox_info<T>& b) {
 			if (a.cost.nonlinearity > b.cost.nonlinearity)
@@ -35,8 +60,11 @@ namespace sbgen {
 				return true;
 			return (a.cost.cost > b.cost.cost);
 		}
-	};
+	}; // class comparators
 
+	/**
+	 * @brief comparator wrapper for std::priority_queue
+	 * */
 	template <typename T>
 	struct genetic_comparator {
 	public:
@@ -47,85 +75,126 @@ namespace sbgen {
 		}
 	}; // struct genetic_comparator
 
+	/**
+	 * @brief population type pseudonim
+	 * */
 	template <typename T>
-	using population_t = std::priority_queue<sbox_info<T>, 
+	using population_t = std::priority_queue<sbox_info<T>,
 		std::vector<sbox_info<T>>, genetic_comparator<T>>;
 
-    template <typename T>
+	/**
+	 * @brief selection method pseudonim
+	 * */
+	template <typename T>
 	using selection_method_t =
 		std::function<void(population_t<T>&, std::vector<sbox_info<T>>&,int)>;
 
-	using crossover_method_t = 
-		std::function<std::array<uint8_t, 256>(
-			std::array<uint8_t, 256>&, std::array<uint8_t, 256>&)>;
+	/**
+	 * @brief crossover method pseudonim
+	 * */
+	using crossover_method_t = std::function<sbox_t(sbox_t&, sbox_t&)>;
 
+	/**
+	 * @brief selectors
+	 * */
 	class selectors {
 	public:
+		/**
+		 * @brief basic selection (selects only best s-boxes)
+		 * @param population - target population
+		 * @param successors - selected s-boxes
+		 * @param count      - target successors count
+		 * @return returned value via ref in successors
+		 */
 		template <typename T>
-		static void basic_selection(population_t<T>& population, 
-			std::vector<sbox_info<T>>& new_population, int child_per_parent) {
-			T cost_prev;
+		static void basic_selection(population_t<T>& population,
+			std::vector<sbox_info<T>>& successors, const size_t count)
+		{
+			T cost_prev{};
 
-			for (int j = 0; j < child_per_parent; j++)
+			if (population.size() <= count)
+			{
+				while (!population.empty())
+				{
+					successors.push_back(std::move(
+						const_cast<sbox_info<T>&>(population.top())));
+					population.pop();
+				}
+				return;
+			}
+
+			for (size_t j = 0; j < count; j++)
 			{
 				if (population.empty())
 					return;
 
-				sbox_info<T> s = population.top();
+				successors.push_back(std::move(
+					const_cast<sbox_info<T>&>(population.top())));
 				population.pop();
+				cost_prev = successors[j].cost.cost;
 
-				new_population.push_back(s);
-				cost_prev = s.cost.cost;
-
-				while(!population.empty() &&  
-					population.top().cost.cost == cost_prev) {
+				while(!population.empty() &&
+					population.top().cost.cost == cost_prev)
+				{
 					population.pop();
 				}
 			}
+
+			return;
 		}
 
+		/**
+		 * @brief rank selection (selects s-boxes via rank method)
+		 * @param population - target population
+		 * @param successors - selected s-boxes
+		 * @param count      - target successors count
+		 * @return returned value via ref in successors
+		 * @warning legacy code. Only for compatibility
+		 */
 		template <typename T>
-		static void rank_selection(population_t<T>& population, 
-			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
+		static void rank_selection(population_t<T>& population,
+			std::vector<sbox_info<T>>& successors, const size_t count)
 		{
-			int total_selected_count = 0;
-			T cost_prev;
-			std::random_device rd;
-			std::mt19937 gen(rd());
-
+			size_t                                 total_selected_count = 0;
+			T                                      cost_prev{};
+			std::random_device                     rd;
+			std::mt19937                           gen(rd());
 			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
-			std::vector<bool> index(population.size(),false);
+			std::vector<bool>                      index(population.size(), false);
+			std::vector<sbox_info<T>>              res;
 
-			std::vector<sbox_info<T>> res;
-			while (!population.empty()) {
-				sbox_info<T> s = population.top();
-				cost_prev = s.cost.cost;
-				res.push_back(s);
+			while (!population.empty())
+			{
+				res.push_back(std::move(
+					const_cast<sbox_info<T>&>(population.top())));
+				population.pop();
+				cost_prev = res.back().cost.cost;
+
 				while(!population.empty() &&  
-					population.top().cost.cost == cost_prev) {
+					population.top().cost.cost == cost_prev)
+				{
 					population.pop();
 				}
 			}
-			std::uniform_int_distribution<int> distrib(0, res.size()-1);
 
-			if (child_per_parent >= (int32_t) res.size())
+			if (res.size() <= count)
 			{
-				new_population = res;
+				successors = std::move(res);
 				return;
 			}
 
-			while (total_selected_count < child_per_parent) 
+			std::uniform_int_distribution<size_t> distrib(0, res.size()-1);
+
+			while (total_selected_count < count) 
 			{
-				int pos = distrib(gen);
+				size_t pos = distrib(gen);
 				if (index[pos] == true)
 					continue;
 
-				if (rdistrib(gen) < ((2.0 * (res.size()-1+pos)) / (
-					child_per_parent * (child_per_parent + 1.0)))) 
+				if (rdistrib(gen) < ((2.0 * (pos)) / (count * (count + 1.0))))
 				{
 					index[pos] = true;
-					new_population.push_back(res[pos]);
-
+					successors.push_back(std::move(res[pos]));
 					total_selected_count++;
 				}
 			}
@@ -133,242 +202,281 @@ namespace sbgen {
 			return;
 		}
 
+		/**
+		 * @brief roulette wheel selection (selects s-boxes
+		 * via roulette wheel method)
+		 * @param population - target population
+		 * @param successors - selected s-boxes
+		 * @param count      - target successors count
+		 * @return returned value via ref in successors
+		 * @warning legacy code. Only for compatibility
+		 */
 		template <typename T>
-		static void roulette_wheel_selection(population_t<T>& population, 
-			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
+		static void roulette_wheel_selection(population_t<T>& population,
+			std::vector<sbox_info<T>>& successors, const size_t count)
 		{
-			int total_selected_count = 0;
-			T Z = 0;
-			T cost_prev;
-			std::random_device rd;
-			std::mt19937 gen(rd());
-
+			size_t                                 total_selected_count = 0;
+			T                                      cost_sum{};
+			T                                      cost_prev{};
+			std::random_device                     rd;
+			std::mt19937                           gen(rd());
 			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
-			std::vector<bool> index(population.size(), false);
+			std::vector<bool>                      index(population.size(), false);
+			std::vector<sbox_info<T>>              res;
 
-			std::vector<sbox_info<T>> res;
-			while (!population.empty()) {
-				sbox_info<T> s = population.top();
-				cost_prev = s.cost.cost;
-				Z += s.cost.cost;
-				res.push_back(s);
+			while (!population.empty())
+			{
+				res.push_back(std::move(
+					const_cast<sbox_info<T>&>(population.top())));
+				population.pop();
+				cost_prev = res.back().cost.cost;
+				cost_sum += cost_prev;
+
 				while(!population.empty() &&  
-					population.top().cost.cost == cost_prev) {
+					population.top().cost.cost == cost_prev) 
+				{
 					population.pop();
 				}
 			}
-			std::uniform_int_distribution<int> distrib(0, res.size() - 1);
 
-			if (child_per_parent >= (int) res.size())
+			if (res.size() <= count)
 			{
-				new_population = res;
+				successors = std::move(res);
 				return;
 			}
 
-			while (total_selected_count < child_per_parent)
+			std::uniform_int_distribution<size_t> distrib(0, res.size()-1);
+
+			while (total_selected_count < count)
 			{
-				int pos = distrib(gen);
+				size_t pos = distrib(gen);
 				if (index[pos] == true)
 					continue;
 
-				if (rdistrib(gen) < ((double)res[pos].cost.cost/Z)) {
-					index[pos] = true;
-					new_population.push_back(res[pos]);
-
-					total_selected_count++;
-				}
-			}
-
-			return;
-		}
-
-		template <typename T>
-		static void rank_sequential_selection(population_t<T>& population, 
-			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
-		{
-			int total_selected_count = 0;
-			T cost_prev;
-			std::random_device rd;
-			std::mt19937 gen(rd());
-
-			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
-			std::vector<bool> index(population.size(),false);
-
-			std::vector<sbox_info<T>> res;
-			while (!population.empty()) {
-				sbox_info<T> s = population.top();
-				cost_prev = s.cost.cost;
-				res.push_back(s);
-				while(!population.empty() &&  
-					population.top().cost.cost == cost_prev) {
-					population.pop();
-				}
-			}
-			std::uniform_int_distribution<int> distrib(0, res.size()-1);
-
-			if (child_per_parent >= (int32_t) res.size())
-			{
-				new_population = res;
-				return;
-			}
-
-			int i = 0;
-			while (total_selected_count < child_per_parent) 
-			{
-				int pos = i % res.size();// distrib(gen);
-				if (index[pos] == true)
-					continue;
-
-				if (rdistrib(gen) < (1 - (2.0 * (pos)) / (
-					child_per_parent * (child_per_parent + 1.0)))) 
+				if (rdistrib(gen) < ((double)res[pos].cost.cost/cost_sum))
 				{
 					index[pos] = true;
-					new_population.push_back(res[pos]);
-
+					successors.push_back(std::move(res[pos]));
 					total_selected_count++;
 				}
-				i++;
 			}
 
 			return;
 		}
 
+		/**
+		 * @brief modified rank selection (selects s-boxes via rank method)
+		 * @param population - target population
+		 * @param successors - selected s-boxes
+		 * @param count      - target successors count
+		 * @return returned value via ref in successors
+		 */
 		template <typename T>
-		static void roulette_wheel_sequential_selection(population_t<T>& population, 
-			std::vector<sbox_info<T>>& new_population, int child_per_parent) 
+		static void rank_sequential_selection(population_t<T>& population,
+			std::vector<sbox_info<T>>& successors, const size_t count)
 		{
-			int total_selected_count = 0;
-			T Z = 0;
-			T cost_prev;
-			std::random_device rd;
-			std::mt19937 gen(rd());
-
+			size_t                                 total_selected_count = 0;
+			size_t                                 current_position = 0;
+			T                                      cost_prev{};
+			std::random_device                     rd;
+			std::mt19937                           gen(rd());
 			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
-			std::vector<bool> index(population.size(), false);
+			std::vector<bool>                      index(population.size(),false);
+			std::vector<sbox_info<T>>              res;
 
-			std::vector<sbox_info<T>> res;
-			while (!population.empty()) {
-				sbox_info<T> s = population.top();
-				cost_prev = s.cost.cost;
-				Z += s.cost.cost;
-				res.push_back(s);
-				while(!population.empty() &&  
-					population.top().cost.cost == cost_prev) {
+			while (!population.empty())
+			{
+				res.push_back(std::move(
+					const_cast<sbox_info<T>&>(population.top())));
+				population.pop();
+				cost_prev = res.back().cost.cost;
+
+				while(!population.empty() &&
+					population.top().cost.cost == cost_prev)
+				{
 					population.pop();
 				}
 			}
-			std::uniform_int_distribution<int> distrib(0, res.size() - 1);
 
-			if (child_per_parent >= (int) res.size())
+			if (res.size() <= count)
 			{
-				new_population = res;
+				successors = std::move(res);
 				return;
 			}
 
-			int i = 0;
-			while (total_selected_count < child_per_parent)
-			{
-				int pos = i % res.size(); // distrib(gen);
-				i++;
-				//printf("%f\n", res[pos].cost.cost/Z);
-				if (index[pos] == true)
-					continue;
-				//printf("test %d %d\n", i, total_selected_count);
-				if (rdistrib(gen) < ((double)(1 - res[pos].cost.cost/Z))) {
-					index[pos] = true;
-					new_population.push_back(res[pos]);
+			std::uniform_int_distribution<size_t> distrib(0, res.size()-1);
 
+			while (total_selected_count < count) 
+			{
+				if (index[current_position] == true)
+					continue;
+
+				if (rdistrib(gen) < (1 - (2.0 * (current_position)) / (
+					count * (count + 1.0))))
+				{
+					index[current_position] = true;
+					successors.push_back(std::move(res[current_position]));
 					total_selected_count++;
 				}
+				current_position = current_position + 1 % res.size();
+			}
+
+			return;
+		}
+
+		/**
+		 * @brief modified roulette wheel selection
+		 * (selects s-boxes via roulette wheel method)
+		 * @param population - target population
+		 * @param successors - selected s-boxes
+		 * @param count      - target successors count
+		 * @return returned value via ref in successors
+		 */
+		template <typename T>
+		static void roulette_wheel_sequential_selection(
+			population_t<T>& population, std::vector<sbox_info<T>>& successors,
+			const size_t count) 
+		{
+			size_t                                 total_selected_count = 0;
+			size_t                                 current_position = 0;
+			T                                      cost_sum{};
+			T                                      cost_prev{};
+			std::random_device                     rd;
+			std::mt19937                           gen(rd());
+			std::uniform_real_distribution<double> rdistrib(0.0, 1.0);
+			std::vector<bool>                      index(population.size(), false);
+			std::vector<sbox_info<T>>              res;
+
+			while (!population.empty())
+			{
+				res.push_back(std::move(
+					const_cast<sbox_info<T>&>(population.top())));
+				population.pop();
+				cost_prev = res.back().cost.cost;
+				cost_sum += cost_prev;
+
+				while(!population.empty() &&
+					population.top().cost.cost == cost_prev)
+				{
+					population.pop();
+				}
+			}
+
+			if (res.size() <= count)
+			{
+				successors = std::move(res);
+				return;
+			}
+
+			std::uniform_int_distribution<size_t> distrib(0, res.size() - 1);
+
+			while (total_selected_count < count)
+			{
+				if (index[current_position] == true)
+					continue;
+
+				if (rdistrib(gen) < ((double)(
+					1 - res[current_position].cost.cost/cost_sum)))
+				{
+					index[current_position] = true;
+					successors.push_back(std::move(res[current_position]));
+					total_selected_count++;
+				}
+				current_position = current_position + 1 % res.size();
 			}
 
 			return;
 		}
 	}; // class selectors
 
+	/**
+	 * @brief cossovers
+	 * */
 	class cossovers {
 	public:
-		static std::array<uint8_t, 256> cycle(std::array<uint8_t, 256>& a,
-										std::array<uint8_t, 256>& b)
+		/**
+		 * @brief cycle crossover
+		 * @param a - first parent
+		 * @param b - second parent
+		 * @return "child" s-box
+		 * */
+		static sbox_t cycle(sbox_t& a, sbox_t& b)
 		{
-			std::random_device rd;
-			std::mt19937 gen(rd());
+			std::random_device                 rd;
+			std::mt19937                       gen(rd());
 			std::uniform_int_distribution<int> dist(0, 255);
+			std::vector<bool>                  index(256, false);
+			sbox_t                             res;
+			int32_t                            cycle_start = dist(gen);
+			int32_t                            current_pos = cycle_start;
 
-			std::array<bool, 256> index;
-			for (int i = 0;i < 256;i++)
-				index[i] = false;
-			std::array<uint8_t, 256> res;
-
-			int cycle_start = dist(gen);
-			int current_pos = cycle_start;
-			do  {
+			do
+			{
 				res[current_pos] = a[current_pos];
 				index[current_pos] = true;
 				int current_val = b[current_pos];
 
-				for (int i = 0;i < 256;i++) {
-					if (a[i] == current_val) {
+				for (int i = 0; i < 256; i++)
+				{
+					if (a[i] == current_val)
+					{
 						current_pos = i;
 						break;
 					}
 				}
 			} while (cycle_start != current_pos);
 
-			for (int i = 0;i < 256;i++) {
+			for (int i = 0; i < 256; i++)
+			{
 				if (index[i] == false)
 					res[i] = b[i];
 			}
+
 			return std::move(res);
 		}
 
-		static std::array<uint8_t, 256> pmx(std::array<uint8_t, 256>& a,
-						std::array<uint8_t, 256>& b)
+		/**
+		 * @brief pmx crossover
+		 * @param a - first parent
+		 * @param b - second parent
+		 * @return "child" s-box
+		 * */
+		static sbox_t pmx(sbox_t& a, sbox_t& b)
 		{
-			std::random_device rd;
-			std::mt19937 gen(rd());
+			std::random_device                 rd;
+			std::mt19937                       gen(rd());
 			std::uniform_int_distribution<int> dist(0, 255);
+			std::vector<bool>                  index(256, false);
+			std::vector<bool>                  index_values(256, false);
+			sbox_t                             res;
+			int32_t                            start_pos = 0;
+			int32_t                            end_pos = 0;
 
-			std::array<bool, 256> index;
-			std::array<bool, 256> index_values;
-			std::array<uint8_t, 256> res;
-			for (int i = 0;i < 256;i++)
-			{
-				index[i] = false;
-				index_values[i] = false;
-			}
-			
-			//if (properties::is_bijective(a) == false ||
-			//	properties::is_bijective(b) == false)
-			//{
-			//	printf("ERROR!\n");
-			//	for(;;);
-			//}
-
-			int start_pos = 0; 
-			int end_pos = 0;
 			while (start_pos == end_pos)
 			{
-				start_pos = dist(gen)%256;
-				end_pos = dist(gen)%256;
+				start_pos = dist(gen);
+				end_pos = dist(gen);
 				if (start_pos > end_pos)
 					std::swap(start_pos, end_pos);
 			}
 
-			for (int i = start_pos;i <= end_pos;i++) {
+			for (int i = start_pos; i <= end_pos; i++)
+			{
 				res[i] = a[i];
 				index[i] = true;
 				index_values[a[i]] = true;
 			}
 
-			for (int i = 0;i < 256;i++) {
+			for (int i = 0;i < 256;i++)
+			{
 				if (index[i] == true)
 					continue;
-				int value = b[i];
 
-				while (index_values[value] == true) 
+				uint8_t value = b[i];
+
+				while (index_values[value] == true)
 				{
-					for (int j = 0;j < 256;j++) 
+					for (int j = 0;j < 256;j++)
 					{
 						if (a[j] == value) 
 						{
@@ -377,6 +485,7 @@ namespace sbgen {
 						}
 					}
 				}
+
 				res[i] = value;
 				index[i] = true;
 				index_values[value] = true;
@@ -386,6 +495,6 @@ namespace sbgen {
 		}
 	}; // class cossovers
 
-}; // namespace sbgen 
+}; // namespace sbgen
 
 #endif // _SBGEN_GENETIC_DETAILS_
