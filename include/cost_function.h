@@ -205,6 +205,9 @@ cost_info_t<T> wcf (
 	return cost;
 }
 
+/**
+ * @brief PCF cost function parameters
+ **/
 class pcf_function_data_t : public cost_function_data_t {
 public:
 	int32_t level;
@@ -285,6 +288,243 @@ cost_info_t<T> pcf (
 	for(int i=0; i < data->level; i++)
 		cost.cost+=((double)Histogram[max_index - i])/(1<<i);
 		
+	cost.nonlinearity = 128 - max_spectre / 2;
+
+	return cost;
+}
+
+/**
+ * @brief CF1 cost function parameters
+ **/
+class cf1_function_data_t : public cost_function_data_t {
+public:
+	int32_t r; // r-parameter 
+	int32_t x; // x-parameter
+	int32_t y; // x-parameter
+
+	/**
+	* @brief Cost function name
+	**/
+	std::string name() override{
+			return "cf1";
+	}
+
+	/**
+   * @brief Constructor for cf1_function_data_t
+   */
+	cf1_function_data_t(int _r, int _x, int _y) : r(_r), x(_x), y(_y) {};
+	
+	/**
+   * @brief Destructor for cf1_function_data_t
+   */
+	virtual ~cf1_function_data_t() {};
+	
+}; // class cf1_function_data_t
+
+
+/**
+  * @brief CF1 cost function
+  *
+  * Sum( abs(abs(WHT(i,j)) - y)^r)/4 , [[WHT(i,j) < X]] )
+  * for i = 0..255 , j= 0..7   
+  *
+  * @param _data
+  *    cf1 cost function data
+  * @param sbox
+  *    target s-box
+  *@returns
+  *   cost of target s-box
+  */
+template <typename T>
+cost_info_t<T> cf1 (
+	cost_function_data_t* _data, 
+	std::array<uint8_t, 256> sbox
+) 
+{
+	uint8_t truth_table[256];
+	int32_t max_spectre = 0;
+	int spectre[256];
+	cost_info_t<T> cost;
+
+	cf1_function_data_t* data = static_cast<cf1_function_data_t*>(_data);
+
+	cost.cost = 0;
+	for (int b = 1; b < 256; b++)
+	{
+		for (int i = 0; i < 256; i++)
+			truth_table[i] = sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+
+
+		sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+		for (int i = 0; i < 256; i++)
+		{
+			int spectre_temp = spectre[i];
+
+			if (spectre_temp < 0)
+				spectre_temp = -spectre_temp;
+
+			if (spectre_temp <= data->x)
+				continue;
+
+			T val = ((spectre_temp - data->y) >= 0) ? 
+				(spectre_temp - data->y) : -(spectre_temp - data->y);
+
+			assert(((void)"error: absolute spectre value less 0", val >= 0));
+
+			T part = val;
+
+			for (int k = 1; k < data->r; k++)
+				part *= val;
+			cost.cost += part/4;
+
+			if (spectre_temp > max_spectre)
+				max_spectre = static_cast<int32_t>(spectre_temp);
+		}
+	}
+
+	cost.nonlinearity = 128 - max_spectre / 2;
+
+	return cost;
+}
+
+/**
+ * @brief CF2 cost function parameters
+ **/
+class cf2_function_data_t : public cost_function_data_t {
+public:
+	int32_t r; // r-parameter 
+	int32_t x; // x-parameter
+	int32_t y; // x-parameter
+
+	/**
+	* @brief Cost function name
+	**/
+	std::string name() override{
+			return "cf2";
+	}
+
+	/**
+   * @brief Constructor for cf1_function_data_t
+   */
+	cf2_function_data_t(int _r, int _x, int _y) : r(_r), x(_x), y(_y) {};
+	
+	/**
+   * @brief Destructor for cf1_function_data_t
+   */
+	virtual ~cf2_function_data_t() {};
+	
+}; // class cf_function_data_t
+
+
+/**
+  * @brief CF2 cost function
+  *
+  * Sum( 2^(abs(abs(WHT(i,j)) - y)*R)/4) , [[WHT(i,j) < X]] )
+  * for i = 0..255 , j= 0..7   
+  *
+  * @param _data
+  *    cf2 cost function data
+  * @param sbox
+  *    target s-box
+  *@returns
+  *   cost of target s-box
+  */
+template <typename T>
+cost_info_t<T> cf2 (
+	cost_function_data_t* _data, 
+	std::array<uint8_t, 256> sbox
+) 
+{
+	uint8_t truth_table[256];
+	int32_t max_spectre = 0;
+	int spectre[256];
+	cost_info_t<T> cost;
+
+	cf2_function_data_t* data = static_cast<cf2_function_data_t*>(_data);
+
+	cost.cost = 0;
+	for (int b = 1; b < 256; b++)
+	{
+		for (int i = 0; i < 256; i++)
+			truth_table[i] = sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+
+
+		sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+		for (int i = 0; i < 256; i++)
+		{
+			int spectre_temp = spectre[i];
+
+			if (spectre_temp < 0)
+				spectre_temp = -spectre_temp;
+
+			if (spectre_temp <= data->x)
+				continue;
+
+			int32_t val = ((spectre_temp - data->y) >= 0) ? 
+				(spectre_temp - data->y) : -(spectre_temp - data->y);
+
+			uint64_t part = (val>>2)*data->r;
+
+			assert(((void)"error: type overflow", part < 64));
+			assert(((void)"error: negative value", part >= 0));
+
+			cost.cost += static_cast<T>(1<<part);
+
+			if (spectre_temp > max_spectre)
+				max_spectre = static_cast<int32_t>(spectre_temp);
+		}
+	}
+
+	cost.nonlinearity = 128 - max_spectre / 2;
+
+	return cost;
+}
+
+template <>
+cost_info_t<double> cf2 (
+	cost_function_data_t* _data, 
+	std::array<uint8_t, 256> sbox
+) 
+{
+	uint8_t truth_table[256];
+	int32_t max_spectre = 0;
+	int spectre[256];
+	cost_info_t<double> cost;
+
+	cf2_function_data_t* data = static_cast<cf2_function_data_t*>(_data);
+
+	cost.cost = 0;
+	for (int b = 1; b < 256; b++)
+	{
+		for (int i = 0; i < 256; i++)
+			truth_table[i] = sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+
+
+		sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+		for (int i = 0; i < 256; i++)
+		{
+			int spectre_temp = spectre[i];
+
+			if (spectre_temp < 0)
+				spectre_temp = -spectre_temp;
+
+			if (spectre_temp <= data->x)
+				continue;
+
+			int32_t val = ((spectre_temp - data->y) >= 0) ? 
+				(spectre_temp - data->y) : -(spectre_temp - data->y);
+
+			double part = (val>>2)*data->r;
+			cost.cost += pow(2.0, part);
+
+			if (spectre_temp > max_spectre)
+				max_spectre = static_cast<int32_t>(spectre_temp);
+		}
+	}
+
 	cost.nonlinearity = 128 - max_spectre / 2;
 
 	return cost;
