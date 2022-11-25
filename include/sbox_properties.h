@@ -9,6 +9,8 @@
 
 namespace sbgen {
 
+	using sbox_t = std::array<uint8_t, 256>;
+
 /**
  * @brief Holds S-box transformations
  *
