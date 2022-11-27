@@ -11,14 +11,14 @@ namespace sbgen {
 
 	using sbox_t = std::array<uint8_t, 256>;
 
-/**
- * @brief Holds S-box transformations
- *
- * Contains set of functions and precomuted values for property calculation
- **/
-class transform_utils {
-public:
-	
+	/**
+	* @brief Holds S-box transformations
+	*
+	* Contains set of functions and precomuted values for property calculation
+	**/
+	class transform_utils
+	{
+	public:
 	/**
 	* @brief Walsh-Hadamard transform of boolean function
 	*
@@ -70,20 +70,21 @@ public:
 	}
 
 	
-  /**
-   * @brief Compute values of all monomials degree less of equal max_deg for set of boolean values
-   * 
-   * This function used in algebraic immunity calculation.
-   * 
-   * @param x
-   *    initial values
-   * @param monomials
-   *    monomial values
-   * @param max_deg
-   *    maximal degree of monomials
-   *@returns
-   *   calculated monomial values for set x via second parameter
-   */
+	/**
+	* @brief Compute values of all monomials degree less of equal max_deg 
+	* for set of boolean values
+	* 
+	* This function used in algebraic immunity calculation.
+	* 
+	* @param x
+	*    initial values
+	* @param monomials
+	*    monomial values
+	* @param max_deg
+	*    maximal degree of monomials
+	*@returns
+	*   calculated monomial values for set x via second parameter
+	*/
 	static void to_monomials(bool* x, bool* monomials, int max_deg) 
 	{
 		monomials[0] = 1;
@@ -122,21 +123,22 @@ public:
 	}
 
 
-  /**
-   * @brief Compute matrix rank
-   * 
-   * Compute matrix rank via gauss elimination for 137x256 (or less) matrix with elements in GF(2).
-   * Used in algebraic degree computation.
-   * 
-   * @param a
-   *    matrix (system of linear equations)
-   * @param n
-   *    columns count
-   * @param m
-   *    rows count
-   *@returns
-   *   rank of matix a
-   */
+	/**
+	* @brief Compute matrix rank
+	* 
+	* Compute matrix rank via gauss elimination for 137x256 (or less) matrix
+	* with elements in GF(2).
+	* Used in algebraic degree computation.
+	* 
+	* @param a
+	*    matrix (system of linear equations)
+	* @param n
+	*    columns count
+	* @param m
+	*    rows count
+	*@returns
+	*   rank of matix a
+	*/
 	static uint32_t gauss_elimination
 	(
 		bool a[137][256],
@@ -168,7 +170,8 @@ public:
 				for (int k = 0; k < n; ++k)
 					if (k != j && a[k][i])
 						for (int p = i + 1; p < m; ++p)
-							a[k][p] = !a[k][p] != !(a[j][p] && a[k][i]);//logical xor: !a != !b
+							a[k][p] = !a[k][p] != !(a[j][p] && a[k][i]);
+							//logical xor: !a != !b
 			}
 		}
 		return rank;
@@ -181,7 +184,11 @@ public:
 	*    matrix (system of linear equations)
 	* @param seed
 	*/
-	static void erase_fixed_points(std::array<uint8_t, 256>& sbox, int32_t seed=0xdeadbeef) 
+	static void erase_fixed_points
+	(
+		std::array<uint8_t, 256>& sbox, 
+		int32_t seed=0xdeadbeef
+	) 
 	{
 		std::mt19937 gen(seed);
 		std::uniform_int_distribution<int> distrib(0, 255);
@@ -201,7 +208,8 @@ public:
 			for (uint32_t i = 0;i < 256;i++) 
 			{
 				uint8_t new_i = (((i << shift1) & 0xFF) | ((i >> (8 - shift1))));
-				sbox_new[i] = (((sbox[new_i] << shift2) & 0xFF) | ((sbox[new_i] >> (8 - shift2))));
+				sbox_new[i] = (((sbox[new_i] << shift2) & 0xFF) |
+					((sbox[new_i] >> (8 - shift2))));
 				sbox_new[i] ^= mask;
 			}
 		
@@ -303,15 +311,15 @@ public:
 }; // class transform_utils 
 
 // Macro definitions for s-box properties
-#define SBGEN_MAX_PROPERTIES_NUMBER	3
+#define SBGEN_MAX_PROPERTIES_NUMBER		3
 
 #define SBGEN_NONLINEARITY				0
-#define SBGEN_DELTA_UNIFORMITY		1
-#define SBGEN_ALGEBRAIC_IMMUNITY	2
+#define SBGEN_DELTA_UNIFORMITY			1
+#define SBGEN_ALGEBRAIC_IMMUNITY		2
 
-#define SBGEN_USE_NONLINEARITY_FLAG					(1<<0)
+#define SBGEN_USE_NONLINEARITY_FLAG				(1<<0)
 #define SBGEN_USE_DELTA_UNIFORMITY_FLAG			(1<<1)
-#define SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG 	(1<<2)
+#define SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG 		(1<<2)
 
 #define setup_property(config, property_index, target_value)\
 	do {\
@@ -319,26 +327,25 @@ public:
 		(config)->target_properties[property_index] = target_value;\
 	} while(false);
 
-/**
- * @brief Avalanche criteria data
- *
- * Contains info about avalanche statistics
- **/
-typedef struct _avalanche_criteria_data {
-	double min;
-	double max;
-	double average;
-	double deviation;
-} avalanche_criterion_data;
+	/**
+	* @brief Avalanche criteria data
+	*
+	* Contains info about avalanche statistics
+	**/
+	typedef struct _avalanche_criteria_data {
+		double min;
+		double max;
+		double average;
+		double deviation;
+	} avalanche_criterion_data;
 
-/**
- * @brief S-box properties
- *
- * Contains set of functions that compute s-box properties
- **/
-class properties {
-public:
-
+	/**
+	* @brief S-box properties
+	*
+	* Contains set of functions that compute s-box properties
+	**/
+	class properties {
+	public:
 	/**
 	* @brief statistics about avalanche effect
 	* 
@@ -553,21 +560,19 @@ public:
 
 		return max_res;
 	}
-	
-  /**
-   * @brief Algebraic immunity
-   * 
-   * Compute S-box algebraic immunity
-   * 
-   * @param sbox
-   *    target sbox
-   *@returns
-   *   sbox algebraic immunity
-   */
+
+	/**
+	* @brief Algebraic immunity
+	* 
+	* Compute S-box algebraic immunity
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   sbox algebraic immunity
+	*/
 	static int32_t algebraic_immunity(std::array<uint8_t, 256>& sbox) 
 	{
-
-		
 		bool mat[137][256];
 		bool tmp[137];
 		bool values[16];
@@ -575,14 +580,22 @@ public:
 		for (int i = 0;i < 256;i++) 
 		{
 			uint8_t y = sbox[i];
-			values[0] = transform_utils::bits[i][0]; values[1] = transform_utils::bits[i][1];
-			values[2] = transform_utils::bits[i][2]; values[3] = transform_utils::bits[i][3];
-			values[4] = transform_utils::bits[i][4]; values[5] = transform_utils::bits[i][5];
-			values[6] = transform_utils::bits[i][6]; values[7] = transform_utils::bits[i][7];
-			values[8] = transform_utils::bits[y][0]; values[9] = transform_utils::bits[y][1];
-			values[10] = transform_utils::bits[y][2]; values[11] = transform_utils::bits[y][3];
-			values[12] = transform_utils::bits[y][4]; values[13] = transform_utils::bits[y][5];
-			values[14] = transform_utils::bits[y][6]; values[15] = transform_utils::bits[y][7];
+			values[0] = transform_utils::bits[i][0]; values[1] =
+				transform_utils::bits[i][1];
+			values[2] = transform_utils::bits[i][2]; values[3] =
+				transform_utils::bits[i][3];
+			values[4] = transform_utils::bits[i][4]; values[5] =
+				transform_utils::bits[i][5];
+			values[6] = transform_utils::bits[i][6]; values[7] =
+				transform_utils::bits[i][7];
+			values[8] = transform_utils::bits[y][0]; values[9] =
+				transform_utils::bits[y][1];
+			values[10] = transform_utils::bits[y][2]; values[11] =
+				transform_utils::bits[y][3];
+			values[12] = transform_utils::bits[y][4]; values[13] =
+				transform_utils::bits[y][5];
+			values[14] = transform_utils::bits[y][6]; values[15] =
+				transform_utils::bits[y][7];
 			transform_utils::to_monomials((bool*)&values, (bool*)tmp,2);
 			for (int j = 0;j < 137;j++)
 				mat[j][i] = tmp[j];
@@ -596,14 +609,22 @@ public:
 		for (int i = 0;i < 256;i++)
 		{
 			uint8_t y = sbox[i];
-			values[0] = transform_utils::bits[i][0]; values[1] = transform_utils::bits[i][1];
-			values[2] = transform_utils::bits[i][2]; values[3] = transform_utils::bits[i][3];
-			values[4] = transform_utils::bits[i][4]; values[5] = transform_utils::bits[i][5];
-			values[6] = transform_utils::bits[i][6]; values[7] = transform_utils::bits[i][7];
-			values[8] = transform_utils::bits[y][0]; values[9] = transform_utils::bits[y][1];
-			values[10] = transform_utils::bits[y][2]; values[11] = transform_utils::bits[y][3];
-			values[12] = transform_utils::bits[y][4]; values[13] = transform_utils::bits[y][5];
-			values[14] = transform_utils::bits[y][6]; values[15] = transform_utils::bits[y][7];
+			values[0] = transform_utils::bits[i][0]; values[1] =
+				transform_utils::bits[i][1];
+			values[2] = transform_utils::bits[i][2]; values[3] =
+				transform_utils::bits[i][3];
+			values[4] = transform_utils::bits[i][4]; values[5] =
+				transform_utils::bits[i][5];
+			values[6] = transform_utils::bits[i][6]; values[7] =
+				transform_utils::bits[i][7];
+			values[8] = transform_utils::bits[y][0]; values[9] =
+				transform_utils::bits[y][1];
+			values[10] = transform_utils::bits[y][2]; values[11] =
+				transform_utils::bits[y][3];
+			values[12] = transform_utils::bits[y][4]; values[13] =
+				transform_utils::bits[y][5];
+			values[14] = transform_utils::bits[y][6]; values[15] =
+				transform_utils::bits[y][7];
 			transform_utils::to_monomials((bool*)&values, (bool*)tmp, 1);
 			for (int j = 0;j < 17;j++)
 				mat[j][i] = tmp[j];
@@ -616,7 +637,17 @@ public:
 
 		return 1;
 	}
-	
+
+	/**
+	* @brief linear redudancy
+	* 
+	* Compute S-box linear redudancy
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   sbox linear redudancy in terms of component bool func classes count
+	*/
 	static uint32_t lineary_redudancy(std::array<uint8_t, 256>& sbox)
 	{
 		uint8_t truth_table[256];
@@ -649,6 +680,16 @@ public:
 		return (uint32_t)tags.size();
 	}
 
+	/**
+	* @brief bijectivity of S-box
+	* 
+	* test S-box on bijectivity
+	* 
+	* @param sbox
+	*    target sbox
+	*@returns
+	*   true - bijective, otherwise - false
+	*/
 	static bool is_bijective(std::array<uint8_t, 256>& sbox)
 	{
 		std::array<uint8_t, 256> count;
@@ -669,7 +710,8 @@ public:
 		}
 		return true;
 	}
-}; // class properties
+
+	}; // class properties
 
     
 }; // namespace sbgen

@@ -14,55 +14,6 @@
 namespace sbgen 
 {
 	/**
-	 * @brief info about s-box in population
-	 * */
-	template <typename T>
-	struct sbox_info {
-		sbox_t sbox;
-		cost_info_t<T> cost;
-	}; // struct sbox_info
-
-	/**
-	 * @brief comparator function definition for population
-	 * */
-	template <typename T>
-	using comparator_t = 
-		std::function<bool(sbox_info<T>&, sbox_info<T>&)>;
-
-	/**
-	 * @brief comparators
-	 * */
-	class comparators {
-	public:
-		/**
-		* @brief less - ordering from smallest to largest
-		* @param a - first s-box
-		* @param b - second s-box
-		* @return true - need exchange s-boxes, other - false
-		* */
-		template <typename T>
-		static bool less(sbox_info<T>& a, sbox_info<T>& b) {
-			return (a.cost.cost > b.cost.cost);
-		}
-
-		/**
-		* @brief less_nl - ordering from smallest to largest
-		* taking into account the nonlinearity
-		* @param a - first s-box
-		* @param b - second s-box
-		* @return true - need exchange s-boxes, other - false
-		* */
-		template <typename T>
-		static bool less_nl(sbox_info<T>& a, sbox_info<T>& b) {
-			if (a.cost.nonlinearity > b.cost.nonlinearity)
-				return false;
-			if (a.cost.nonlinearity < b.cost.nonlinearity)
-				return true;
-			return (a.cost.cost > b.cost.cost);
-		}
-	}; // class comparators
-
-	/**
 	 * @brief comparator wrapper for std::priority_queue
 	 * */
 	template <typename T>
