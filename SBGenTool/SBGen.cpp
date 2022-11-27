@@ -26,27 +26,27 @@
 #define required_argument		1 
 #define optional_argument		2
 
-#define version_flag							0x00
-#define help_flag									0x01
-#define method_flag							0x02
-#define cost_function_flag 					0x03
-#define thread_count_flag					0x04
-#define cost_type_flag						0x05
-#define visibility_flag							0x06
+#define version_flag					0x00
+#define help_flag						0x01
+#define method_flag						0x02
+#define cost_function_flag 				0x03
+#define thread_count_flag				0x04
+#define cost_type_flag					0x05
+#define visibility_flag					0x06
 #define try_per_thread_flag				0x07
 #define max_frozen_loops_flag			0x08
 #define method_params_flag				0x09
 #define cost_function_params_flag		0x0a
-#define nonlinearity_flag						0x0b
-#define delta_uniformity_flag				0x0c
-#define algebraic_immunity_flag		0x0d
-#define seed_flag								0x0e
-#define erase_points_flag					0x0f
+#define nonlinearity_flag				0x0b
+#define delta_uniformity_flag			0x0c
+#define algebraic_immunity_flag			0x0d
+#define seed_flag						0x0e
+#define erase_points_flag				0x0f
 
 #define default_try_per_thread			10000
-#define default_thread_count				1
-#define default_log								0
-#define default_erase_points				0
+#define default_thread_count			1
+#define default_log						0
+#define default_erase_points			0
 
 const struct option longopts[] =
 {
@@ -160,7 +160,6 @@ std::vector<std::string> &split(const std::string &s, char delim,std::vector<std
     }
     return elems;
 }
-
 
 std::vector<std::string> split(const std::string &s, char delim) {
     std::vector<std::string> elems;
