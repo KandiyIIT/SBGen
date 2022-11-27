@@ -3,12 +3,26 @@ Header-only multithread c++17 framework for s-box generation. the library contai
 
 * Hill Climbing [[CS04](#CS04)]
 * Simulated Annealing [[KRPKK22](#KRPKK22)]
+* Genetic Algorithms (our interpretation)
 
 Supported cost functions:
 
 * WHS  [[CS04](#CS04)]
 * PCF [[PCR16](#PCR16)]
 * WCF [[FAM20](#FAM20)]
+* CF1 (See SBGen Wiki)
+* CF2 (See SBGen Wiki)
+
+Supported genetic crossovers:
+
+* PMX
+* CYCLE
+
+Supported genetic selection methods:
+
+* Roulette Wheel Selection
+* Rank Selection
+* Basic Selection (only best S-boxes)
 
 The main property for which optimization is performed is non-linearity, but the library also supports a number of other properties:
 
@@ -50,7 +64,7 @@ Usage example:
 		PRINT_SBOX(sbox.value());
 ```
 
-See SBGenTool and tests as a source of examples.
+See SBGenTool and tests as a source of examples and SBgen Wiki pages.
 
 # Installation #
 

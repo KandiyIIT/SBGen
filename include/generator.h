@@ -42,9 +42,7 @@ struct properties_info_t {
 template <typename T>
 struct shared_info_t {
 	// Best S-box
-	std::array<uint8_t, 256> best_sbox;
-	// Cost of best S-box
-	cost_info_t<T> best_cost;
+    sbox_info<T> best_sbox;
 	// Mutex for acces to shared_info_t fields
 	std::mutex sbox_mutex;
 	// Found s-box?

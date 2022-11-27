@@ -6,24 +6,39 @@
 #include "hill_climbing.h"
 #include "utils.h"
 
+template <typename T>
+void log_data(
+	sbgen::shared_info_t<T>& params,
+	sbgen::hill_climbing_info_t<T>& info
+	)
+{
+	std::cout<<"target s-box found!"<<std::endl;
+	std::cout<<"iteration: "<<params.iteration.load()<<std::endl;
+	return;
+}
+
 int test_hill_climbing_with_whs1() 
 {
-
 	sbgen::hill_climbing_info_t<double> info;
 
 	info.thread_count = 1;
-	info.is_log_enabled = false;
+	info.is_log_enabled = true;
+	info.use_log_function = true;
+	info.default_log_output = false;
+	info.log_good_nl = true;
+	info.log_better_sbox = true;
+	info.log_good_nl_function = log_data<double>;
+	info.log_better_sbox_function = [](auto& params, auto& info) -> void
+		{
+			std::cout<<"better sbox found!"<<std::endl;
+			std::cout<<"iteration: "<<params.iteration.load()<<std::endl;
+			return;
+		};
 
 	info.try_per_thread = 1000000;
 	info.max_frozen_count = 100000;
 	
 	setup_property( &info, SBGEN_NONLINEARITY, 102);
-
-	
-	info.use_random_seed = false;
-	info.seed = 0xdeadbeef;
-
-
 
 	info.cost_function = sbgen::whs<double>;
 	info.cost_data.reset(new sbgen::whs_function_data_t(12, 0));
