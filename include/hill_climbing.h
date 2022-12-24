@@ -119,6 +119,9 @@ namespace sbgen
 				params.sbox_mutex.lock();
 				params.best_sbox = sbox;
 				params.is_found = true;
+				if (info.is_log_enabled)
+					std::cout<<"SEARCH COST:"
+						<<params.iteration.load()<<std::endl;
 				params.sbox_mutex.unlock();
 				return;
 			}
@@ -134,7 +137,7 @@ namespace sbgen
 						if (info.default_log_output)
 						{
 							std::cout << "iteration=" 
-							<< params.iteration.load() 
+							<<params.iteration.load() 
 							<< "	Search stopped: frozen_count > max_frozen_count"
 							<< std::endl;
 						}

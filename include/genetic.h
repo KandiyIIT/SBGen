@@ -33,6 +33,8 @@ namespace sbgen
 		std::mutex sbox_mutex;
 
 		std::atomic<bool> is_sbox_found;
+
+		std::atomic<uint32_t> iteration;
 	};
 
 	/**
@@ -51,7 +53,7 @@ namespace sbgen
 		int32_t child_per_parent;
 		int32_t iterations_count;
 		int32_t initial_population_count;
-		int32_t crossover_count;
+		int32_t crossover_count = 0;
 
 		// flags
 		bool use_crossover;
@@ -103,6 +105,7 @@ namespace sbgen
 
 		while(1)
 		{
+			params.iteration.fetch_add(1);
 			if (params.is_sbox_found.load() == true)
 				break;
 
@@ -159,6 +162,10 @@ namespace sbgen
 							<< "	NL=" 
 							<< params.best_sbox.cost.nonlinearity 
 							<< std::endl;
+							std::cout<<"SEARCH COST:"
+								<<params.iteration.load()*(
+									info.selection_count+info.crossover_count
+								)<<std::endl;
 						}
 					}
 					params.sbox_mutex.unlock();

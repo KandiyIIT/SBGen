@@ -9,6 +9,7 @@
 #include <getopt.h>
 #include <map>
 #include <sstream> 
+#include <fstream>
 
 #include "hill_climbing.h"
 #include "simulated_annealing.h"
@@ -49,6 +50,7 @@
 #define selection_method_flag			0x10
 #define crossover_method_flag			0x11
 #define sbox_count_flag					0x12
+#define to_file_flag					0x13
 
 #define default_try_per_thread			10000
 #define default_thread_count			1
@@ -77,6 +79,7 @@ const struct option longopts[] =
 	{"selection_method",	required_argument,	0,	selection_method_flag},
 	{"crossover_method",	required_argument,	0,	crossover_method_flag},
 	{"sbox_count",			required_argument,	0,	sbox_count_flag},
+	{"to_file",				required_argument,	0,	to_file_flag},
 	{0,0,0,0},
 };
 
@@ -98,21 +101,32 @@ void print_help()
 		<< "\tPrint version info\n"
 		<< "\t--help\n"
 		<< "\t\tPrint help message\n"
+		<< "\t--to_file\n"
+		<< "\t\tRedirect output to file. (Example: --to_file=\"log.txt\"\n"
 		<< "\t--seed\n"
 		<< "\t\tseed for randomness. Warning: in multithread mode there is\n"
+		<< "\t\tadditional randomnes caused by concurrency\n"
 		<< "\t--sbox_count\n"
 		<< "\t\ttarget sbox count. Default value - 1.\n"
-		<< "\t\tadditional randomnes caused by concurrency\n"
 		<< "\t--method [hill_climbing|simulated_annealing|genetic]\n"
 		<< "\t\thill_climbing = hill climbing method\n"
 		<< "\t\tsimulated_annealing = simulated annealing method\n"
 		<< "\t\tgenetic = genetic method\n"
-		<< "\t--cost_function [whs|wcf|pcf]\n"
+		<< "\t--cost_function [whs|wcf|pcf|cf1|cf2]\n"
 		<< "\t\twhs = WHS cost function\n"
 		<< "\t\twcf = WCF cost function\n"
 		<< "\t\tpcf = PCF cost function\n"
 		<< "\t\tcf1 = CF1 cost function\n"
 		<< "\t\tcf2 = CF2 cost function\n"
+		<< "\t--selection_method [basic|rank|roulette]\n"
+		<< "\t\tbasic = select only best s-boxes\n"
+		<< "\t\trank = rank selection\n"
+		<< "\t\troulette = roulette wheel selection\n"
+		<< "\t--crossover_method=\"name, count, child\"\n"
+		<< "\t\tname = crossover method name [cycle|pmx]\n"
+		<< "\t\tcount = crossover pairs count\n"
+		<< "\t\tchild = child per parent\n"
+		<< "\t\tExample: --crossover_method=\"pmx, 10, 1\"\n"
 		<< "\t--thread_count\n"
 		<< "\t\tmax thread count\n"
 		<< "\t--cost_type [int64_t|double]\n"
@@ -121,11 +135,12 @@ void print_help()
 		<< "\t--try_per_thread\n"
 		<< "\t\tmaximal iterations count in method\n"
 		<< "\t--max_frozen_loops\n"
-		<< "\t\tmax iterations count without any chages\n\n"
+		<< "\t\tmax iterations count without any chages\n"
+		<< "\t\t(not actual for genetic)\n\n"
 		<< "Method parameter list:\n\n"
 		<< "\t--method_params\n"
 		<< "\t\tparams of method in format\n"
-		<< "\t\t--method_params={param1,param2,...,paramN}\n"
+		<< "\t\t--method_params=\"param1,param2,...,paramN\"\n"
 		<< "\thill_climbing:\n"
 		<< "\t\tHas no free options\n"
 		<< "\tsimulated_annealing\n"
@@ -133,28 +148,34 @@ void print_help()
 		<< "\t\tparam2: max_inner_loops - maximal inner loop count\n"
 		<< "\t\tparam3: initial_temperature -  initial temperature\n"
 		<< "\t\tparam4: alpha_parameter -  alpha_parameter\n"
-		<< "\t\tExample: --method_params=\"{10, 10000, 1000, 0.99}\"\n\n"
+		<< "\t\tExample: --method_params=\"10, 10000, 1000, 0.99\"\n"
+		<< "\tgenetic\n"
+		<< "\t\tparam1: initial_population_count - initial s-box count\n"
+		<< "\t\tparam2: mutants_per_parent - mutants count in thread\n"
+		<< "\t\tparam3: selection_count - selected s-box count\n"
+		<< "\t\tparam4: use_crossover - shoud use crossover?\n"
+		<< "\t\tExample: --method_params=\"100, 20, 100, 1\"\n\n"
 		<< "Cost function parameter list:\n\n"
 		<< "\t--cost_function_params\n"
 		<< "\t\tparams of cost function in format\n"
-		<< "\t\t--cost_function_params={param1,param2,...,paramN}\n"
+		<< "\t\t--cost_function_params=\"param1,param2,...,paramN\"\n"
 		<< "\twhs\n"
 		<< "\t\tparam1: r\n"
 		<< "\t\tparam2: x\n"
-		<< "\t\tExample: --cost_function_params=\"{12, 0}\"\n"
+		<< "\t\tExample: --cost_function_params=\"12, 0\"\n"
 		<< "\tcf1\n"
 		<< "\t\tparam1: r\n"
 		<< "\t\tparam2: x\n"
 		<< "\t\tparam2: y\n"
-		<< "\t\tExample: --cost_function_params=\"{12, 32, 0}\"\n"
+		<< "\t\tExample: --cost_function_params=\"12, 32, 0\"\n"
 		<< "\tcf2\n"
 		<< "\t\tparam1: r\n"
 		<< "\t\tparam2: x\n"
 		<< "\t\tparam2: y\n"
-		<< "\t\tExample: --cost_function_params=\"{12, 32, 0}\"\n"
+		<< "\t\tExample: --cost_function_params=\"12, 32, 0\"\n"
 		<< "\tpcf\n"
 		<< "\t\tparam1: n\n"
-		<< "\t\tExample: --cost_function_params=\"{5}\"\n"
+		<< "\t\tExample: --cost_function_params=\"5\"\n"
 		<< "\twcf\n"
 		<< "\t\tHas no free options\n\n"
 		<< "Target properties:\n\n"
@@ -261,11 +282,11 @@ full_cost_info_t<T> get_cost_function(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				
 				return std::make_pair<sbgen::cost_function_t<T>,
@@ -301,11 +322,11 @@ full_cost_info_t<T> get_cost_function(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 
 				return std::make_pair<sbgen::cost_function_t<T>,
@@ -341,11 +362,11 @@ full_cost_info_t<T> get_cost_function(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				return std::make_pair<sbgen::cost_function_t<T>,
 					sbgen::cost_function_data_t*>(sbgen::cf2<T>,
@@ -376,11 +397,11 @@ full_cost_info_t<T> get_cost_function(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				
 				return std::make_pair<sbgen::cost_function_t<T>,
@@ -455,11 +476,11 @@ void setup_properties(
 	}
 	catch (const std::invalid_argument & e) 
 	{
-		std::cout << e.what() << "\n";
+		ABORT_MSG(e.what());
 	}
 	catch (const std::out_of_range & e) 
 	{
-		std::cout << e.what() << "\n";
+		ABORT_MSG(e.what());
 	}
 }
 
@@ -523,11 +544,11 @@ void setup_crossover_properties(
 		}
 		catch (const std::invalid_argument & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
 		catch (const std::out_of_range & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
 	}
 	else
@@ -578,11 +599,11 @@ void run_generator(
 		}
 		catch (const std::invalid_argument & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
 		catch (const std::out_of_range & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
 		
 		if(parameter->second == "hill_climbing")
@@ -688,11 +709,11 @@ void run_generator(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				
 			}
@@ -771,10 +792,10 @@ void run_generator(
 			info.thread_count = thread_count;
 			info.iterations_count = try_per_thread;
 			info.is_log_enabled = visibility;
-			info.default_log_output = true;
+			info.default_log_output = info.is_log_enabled;
 			info.delete_parents = false;
 
-			sbgen::selection_method_t<T> selection_method =
+			info.selection_method =
 				get_selection_method(info, options);
 			info.cost_function = cost.first;
 			info.cost_data.reset(cost.second);
@@ -798,11 +819,11 @@ void run_generator(
 				}
 				catch (const std::invalid_argument & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 				catch (const std::out_of_range & e) 
 				{
-					std::cout << e.what() << "\n";
+					ABORT_MSG(e.what());
 				}
 
 			}
@@ -813,16 +834,20 @@ void run_generator(
 			setup_crossover_properties(info, options);
 			
 			std::cout<<"Starting genetic method..."<<std::endl;
-			/*
+		
 			std::cout<<"Parameters:"<<std::endl;
 			std::cout<<"Thread count: "<<info.thread_count<<std::endl;
-			std::cout<<"Max outer loops in thread: "<<info.max_outer_loops<<std::endl;
-			std::cout<<"Max inner loops in thread: "<<info.max_inner_loops<<std::endl;
-			std::cout<<"Initial temperature: "<<info.initial_temperature<<std::endl;
-			std::cout<<"Alpha parameter: "<<info.alpha_parameter<<std::endl;
-			std::cout<<"Max frozen loops: "<<info.max_frozen_outer_loops<<std::endl;
+			std::cout<<"Mutants per parent: "<<info.mutants_per_parent<<std::endl;
+			std::cout<<"Selection count: "<<info.selection_count<<std::endl;
+			std::cout<<"Iterations count: "<<info.iterations_count<<std::endl;
+			std::cout<<"Init s-box count: "<<info.initial_population_count<<std::endl;
+			if (info.use_crossover)
+			{
+				std::cout<<"Child count: "<<info.child_per_parent<<std::endl;
+				std::cout<<"Crossover count: "<<info.crossover_count<<std::endl;
+			}
 			std::cout<<"Log level: "<<info.is_log_enabled<<std::endl;
-			std::cout<<"Cost Function: "<<info.cost_data->name()<<std::endl;*/
+			std::cout<<"Cost Function: "<<info.cost_data->name()<<std::endl;
 			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG)
 			{
 				std::cout<<"target NL: "
@@ -863,9 +888,8 @@ void run_generator(
 					<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
 				std::cout<<"Fixed Points= "
 					<<sbgen::properties::fixed_points(sb)<<std::endl;
-				
 			} else {
-				ABORT_MSG("SBox not found. Try another parameters.");
+				std::cout<<"SBox not found. Try another parameters.\n";
 			}
 		}
 	}
@@ -882,7 +906,7 @@ int main(
 
 	parse_options(argc, argv, options);
 
-	auto sbox_count_parameter = options.find(help_flag);
+	auto sbox_count_parameter = options.find(sbox_count_flag);
 	if (sbox_count_parameter != options.end())
 	{
 		try 
@@ -891,12 +915,20 @@ int main(
 		}
 		catch (const std::invalid_argument & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
 		catch (const std::out_of_range & e) 
 		{
-			std::cout << e.what() << "\n";
+			ABORT_MSG(e.what());
 		}
+	}
+
+	auto file_redirect = options.find(to_file_flag);
+	if (file_redirect != options.end())
+	{
+		auto handle = freopen(file_redirect->second.c_str(),"w",stdout);
+		if (handle)
+			handle = NULL;
 	}
 
 	auto parameter = options.find(help_flag);

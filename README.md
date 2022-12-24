@@ -80,69 +80,108 @@ make
 Interface of SBGenTool:
 
 ```
-Usage: sbgen --method [METHOD] [OPTIONS] 
+Usage: sbgen --method [METHOD] [OPTIONS]
 List of options:
 
-  --visibility
-       Enable verbose mode
-  --version
-       Print version info
-  --help
-       Print help message
-  --seed
-       seed for randomness. Warning: in multithread mode there is
-       additional randomnes caused by concurrency
-  --method [hill_climbing|simulated_annealing]
-       hill_climbing = hill climbing method
-       simulated_annealing = simulated annealing method
-  --cost_function [whs|wcf|pcf]
-       whs = WHS cost function
-       wcf = WCF cost function
-       pcf = PCF cost function
-  --thread_count
-       max thread count
-  --cost_type [int64_t|double]
-       type of variable, where stored s-box cost. Default value - double
-  --try_per_thread
-       maximal iterations count in method
-  --max_frozen_loops
-       max iterations count without any chages
+	--visibility
+		Enable verbose mode
+	--version
+	Print version info
+	--help
+		Print help message
+	--seed
+		seed for randomness. Warning: in multithread mode there is
+		additional randomnes caused by concurrency
+	--sbox_count
+		target sbox count. Default value - 1.
+	--method [hill_climbing|simulated_annealing|genetic]
+		hill_climbing = hill climbing method
+		simulated_annealing = simulated annealing method
+		genetic = genetic method
+	--cost_function [whs|wcf|pcf|cf1|cf2]
+		whs = WHS cost function
+		wcf = WCF cost function
+		pcf = PCF cost function
+		cf1 = CF1 cost function
+		cf2 = CF2 cost function
+	--selection_method [basic|rank|roulette]
+		basic = select only best s-boxes
+		rank = rank selection
+		roulette = roulette wheel selection
+	--crossover_method="name, count, child"
+		name = crossover method name [cycle|pmx]
+		count = crossover pairs count
+		child = child per parent
+		Example: --crossover_method="pmx, 10, 1"
+	--thread_count
+		max thread count
+	--cost_type [int64_t|double]
+		type of variable, where stored s-box cost.
+		Default value - double
+	--try_per_thread
+		maximal iterations count in method
+	--max_frozen_loops
+		max iterations count without any chages
+		(not actual for genetic)
 
 Method parameter list:
 
-  --method_params
-       params of method in format --method_params={param1,param2,...,paramN}
-  hill_climbing:
-       Has no free options
-  simulated_annealing
-       param1: max_outer_loops - maximal outer loop count
-       param2: max_inner_loops - maximal inner loop count
-       param3: initial_temperature -  initial temperature
-       param4: alpha_parameter -  alpha_parameter
-       Example: --method_params="{10, 10000, 1000, 0.99}"
+	--method_params
+		params of method in format
+		--method_params="param1,param2,...,paramN"
+	hill_climbing:
+		Has no free options
+	simulated_annealing
+		param1: max_outer_loops - maximal outer loop count
+		param2: max_inner_loops - maximal inner loop count
+		param3: initial_temperature -  initial temperature
+		param4: alpha_parameter -  alpha_parameter
+		Example: --method_params="10, 10000, 1000, 0.99"
+	genetic
+		param1: initial_population_count - initial s-box count
+		param2: mutants_per_parent - mutants count in thread
+		param3: selection_count - selected s-box count
+		param4: use_crossover - shoud use crossover?
+		Example: --method_params="100, 20, 100, 1"
 
 Cost function parameter list:
 
-  --cost_function_params
-       params of cost function in format --cost_function_params={param1,param2,...,paramN}
-  whs
-       param1: r
-       param2: x
-       Example: --cost_function_params="{12, 0}"
-  pcf
-       param1: n
-       Example: --cost_function_params="{5}"
-  wcf
-       Has no free options
+	--cost_function_params
+		params of cost function in format
+		--cost_function_params="param1,param2,...,paramN"
+	whs
+		param1: r
+		param2: x
+		Example: --cost_function_params="12, 0"
+	cf1
+		param1: r
+		param2: x
+		param2: y
+		Example: --cost_function_params="12, 32, 0"
+	cf2
+		param1: r
+		param2: x
+		param2: y
+		Example: --cost_function_params="12, 32, 0"
+	pcf
+		param1: n
+		Example: --cost_function_params="5"
+	wcf
+		Has no free options
 
 Target properties:
 
-  --nonlinearity
-       target nonlinearity value.
-  --delta_uniformity
-       target delta uniformity value.
-  --algebraic_immunity
-       target algebraic immunity value.
+	--nonlinearity
+		target nonlinearity value.
+	--delta_uniformity
+		target delta uniformity value.
+	--algebraic_immunity
+		target algebraic immunity value.
+	--erase_fixed_points
+		delete fixed points via affine transform
+
+Please refer to https://github.com/KandiyIIT/SBGen/README.md
+for more information.
 ```
 
 Usage example:
@@ -173,6 +212,14 @@ NL= 104
 DU= 8
 AI= 3
 Fixed Points= 0
+```
+
+```
+sbgen --method=genetic --cost_function=wcf --selection_method=basic --thread_count=8 --cost_type=double --method_params="100, 10, 100, 1" --nonlinearity=104 --visibility --try_per_thread=10000 --crossover_method="pmx, 10, 1" --to_file="log.txt"
+```
+
+```
+sbgen --method=hill_climbing --cost_function=cf1 --thread_count=16 --cost_type=double --try_per_thread=1000000 --cost_function_params="14, 32, -8" --nonlinearity=104 --visibility --sbox_count=4 --to_file="log.txt"
 ```
 
 <a name="CS04">[CS04]<a/> John A. Clark. The Design of S-Boxes by Simulated Annealing. New Generation Computing 23(3):219-231 (2004)

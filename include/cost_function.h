@@ -131,6 +131,62 @@ namespace sbgen
 	*@returns
 	*   cost of target s-box
 	*/
+	// specialization for case r<0
+	template <typename T>
+	cost_info_t<T> _whs_minus (
+		cost_function_data_t* _data, 
+		sbox_t sbox
+	) 
+	{
+		uint8_t truth_table[256];
+		int32_t max_spectre = 0;
+		int spectre[256];
+		cost_info_t<T> cost;
+
+		whs_function_data_t* data = static_cast<whs_function_data_t*>(_data);
+		if (data->r < 0)
+			data->r = -data->r;
+
+		cost.cost = 0;
+		for (int b = 1; b < 256; b++)
+		{
+			for (int i = 0; i < 256; i++)
+			{
+				truth_table[i] =
+					sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+			}
+
+			sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+			for (int i = 0; i < 256; i++)
+			{
+				int spectre_temp = spectre[i];
+
+				if (spectre_temp < 0)
+					spectre_temp = -spectre_temp;
+				T val = ((spectre_temp - data->x) >= 0) ?
+					(spectre_temp - data->x) : -(spectre_temp - data->x);
+
+				assert(((void)"error: absolute spectre value less 0", val >= 0));
+
+				T part = val;
+				T one = 1.0;
+
+				for (int k = 1; k < data->r; k++)
+					part *= val;
+				if (part != 0)
+					cost.cost += one/part;
+
+				if (spectre_temp > max_spectre)
+					max_spectre = static_cast<int32_t>(spectre_temp);
+			}
+		}
+
+		cost.nonlinearity = 128 - max_spectre / 2;
+
+		return cost;
+	}
+
 	template <typename T>
 	cost_info_t<T> whs (
 		cost_function_data_t* _data, 
@@ -143,7 +199,8 @@ namespace sbgen
 		cost_info_t<T> cost;
 
 		whs_function_data_t* data = static_cast<whs_function_data_t*>(_data);
-
+		if (data->r < 0)
+			return _whs_minus<T>(_data, sbox);
 
 		cost.cost = 0;
 		for (int b = 1; b < 256; b++)
@@ -182,7 +239,6 @@ namespace sbgen
 
 		return cost;
 	}
-
 
 	/**
 	* @brief WCF cost function parameters
@@ -393,6 +449,67 @@ namespace sbgen
 	*@returns
 	*   cost of target s-box
 	*/
+	// specialization for case r < 0
+	template <typename T>
+	cost_info_t<T> _cf1_minus (
+		cost_function_data_t* _data, 
+		sbox_t sbox
+	) 
+	{
+		uint8_t truth_table[256];
+		int32_t max_spectre = 0;
+		int spectre[256];
+		cost_info_t<T> cost;
+
+		cf1_function_data_t* data = static_cast<cf1_function_data_t*>(_data);
+		if (data->r < 0)
+			data->r = -data->r;
+
+		cost.cost = 0;
+		for (int b = 1; b < 256; b++)
+		{
+			for (int i = 0; i < 256; i++)
+			{
+				truth_table[i] =
+					sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+			}
+
+
+			sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+			for (int i = 0; i < 256; i++)
+			{
+				int spectre_temp = spectre[i];
+
+				if (spectre_temp < 0)
+					spectre_temp = -spectre_temp;
+
+				if (spectre_temp <= data->x)
+					continue;
+
+				T val = ((spectre_temp - data->y) >= 0) ? 
+					(spectre_temp - data->y) : -(spectre_temp - data->y);
+
+				assert(((void)"error: absolute spectre value less 0", val >= 0));
+
+				T part = val;
+				T one = 1.0;
+
+				for (int k = 1; k < data->r; k++)
+					part *= val;
+				if (part != 0)
+					cost.cost += (one/part)*4;
+
+				if (spectre_temp > max_spectre)
+					max_spectre = static_cast<int32_t>(spectre_temp);
+			}
+		}
+
+		cost.nonlinearity = 128 - max_spectre / 2;
+
+		return cost;
+	}
+
 	template <typename T>
 	cost_info_t<T> cf1 (
 		cost_function_data_t* _data, 
@@ -405,6 +522,8 @@ namespace sbgen
 		cost_info_t<T> cost;
 
 		cf1_function_data_t* data = static_cast<cf1_function_data_t*>(_data);
+		if (data->r < 0)
+			return _cf1_minus<T>(_data, sbox);
 
 		cost.cost = 0;
 		for (int b = 1; b < 256; b++)
