@@ -1,3 +1,5 @@
+//=============================================================================
+
 #include <iostream>
 #include <functional>
 #include <string>
@@ -10,21 +12,23 @@
 
 #include "hill_climbing.h"
 #include "simulated_annealing.h"
+#include "genetic.h"
+#include "genetic_internals.h"
 #include "cost_function.h"
 #include "utils.h"
 #include "sbgen_info.h"
 
+//=============================================================================
 
-#define ABORT_MSG(y)\
-	{\
+#define ABORT_MSG(y)                         \
+{                                            \
 	std::cerr << "sbgen: " << y << std::endl;\
-	exit(1);\
-	}
+	exit(1);                                 \
+}
 
-
-#define no_argument				0
-#define required_argument		1 
-#define optional_argument		2
+#define no_argument						0
+#define required_argument				1 
+#define optional_argument				2
 
 #define version_flag					0x00
 #define help_flag						0x01
@@ -42,154 +46,215 @@
 #define algebraic_immunity_flag			0x0d
 #define seed_flag						0x0e
 #define erase_points_flag				0x0f
+#define selection_method_flag			0x10
+#define crossover_method_flag			0x11
+#define sbox_count_flag					0x12
 
 #define default_try_per_thread			10000
 #define default_thread_count			1
 #define default_log						0
 #define default_erase_points			0
+#define default_sbox_count				1
 
 const struct option longopts[] =
 {
-	{"version",						no_argument,			0,	version_flag},
-	{"visibility",						no_argument,			0,	visibility_flag},
-	{"help",							no_argument,			0,	help_flag},
-	{"erase_points",				no_argument,	0,	erase_points_flag},
-	{"method",						required_argument,	0,	method_flag},
-	{"cost_function",				required_argument,	0,	cost_function_flag},
-	{"thread_count",				required_argument,	0,	thread_count_flag},
-	{"cost_type",					required_argument,	0,	cost_type_flag},
-	{"try_per_thread",			required_argument,	0,	try_per_thread_flag},
-	{"method_params",			required_argument,	0,	method_params_flag},
+	{"version",				no_argument,		0,	version_flag},
+	{"visibility",			no_argument,		0,	visibility_flag},
+	{"help",				no_argument,		0,	help_flag},
+	{"erase_points",		no_argument,		0,	erase_points_flag},
+	{"method",				required_argument,	0,	method_flag},
+	{"cost_function",		required_argument,	0,	cost_function_flag},
+	{"thread_count",		required_argument,	0,	thread_count_flag},
+	{"cost_type",			required_argument,	0,	cost_type_flag},
+	{"try_per_thread",		required_argument,	0,	try_per_thread_flag},
+	{"method_params",		required_argument,	0,	method_params_flag},
 	{"cost_function_params",required_argument,	0,	cost_function_params_flag},
-	{"nonlinearity",				required_argument,	0,	nonlinearity_flag},
-	{"delta_uniformity",			required_argument,	0,	delta_uniformity_flag},
+	{"nonlinearity",		required_argument,	0,	nonlinearity_flag},
+	{"delta_uniformity",	required_argument,	0,	delta_uniformity_flag},
 	{"algebraic_immunity",	required_argument,	0,	algebraic_immunity_flag},
-	{"seed",							required_argument,	0,	seed_flag},
-	{"max_frozen_loops",		required_argument,	0,	max_frozen_loops_flag},
-
+	{"seed",				required_argument,	0,	seed_flag},
+	{"max_frozen_loops",	required_argument,	0,	max_frozen_loops_flag},
+	{"selection_method",	required_argument,	0,	selection_method_flag},
+	{"crossover_method",	required_argument,	0,	crossover_method_flag},
+	{"sbox_count",			required_argument,	0,	sbox_count_flag},
 	{0,0,0,0},
 };
 
+using options_t = std::map<int, std::string>;
+
+template<typename T>
+using full_cost_info_t =
+	std::pair<sbgen::cost_function_t<T>, sbgen::cost_function_data_t*>;
+
+//=============================================================================
+
 void print_help()
 {
-	std::cout << "Usage: sbgen --method [METHOD] [OPTIONS] \n"
+	std::cout << "Usage: sbgen --method [METHOD] [OPTIONS]\n"
 		<< "List of options:\n\n"
-			<< "  --visibility\n"
-			<< "       Enable verbose mode\n"
-			<< "  --version\n"
-			<< "       Print version info\n"
-			<< "  --help\n"
-			<< "       Print help message\n"
-			<< "  --seed\n"
-			<< "       seed for randomness. Warning: in multithread mode there is\n"
-			<< "       additional randomnes caused by concurrency\n"
-			<< "  --method [hill_climbing|simulated_annealing]\n"
-			<< "       hill_climbing = hill climbing method\n"
-			<< "       simulated_annealing = simulated annealing method\n"
-			<< "  --cost_function [whs|wcf|pcf]\n"
-			<< "       whs = WHS cost function\n"
-			<< "       wcf = WCF cost function\n"
-			<< "       pcf = PCF cost function\n"
-			<< "  --thread_count\n"
-			<< "       max thread count\n"
-			<< "  --cost_type [int64_t|double]\n"
-			<< "       type of variable, where stored s-box cost. Default value - double\n"
-			<< "  --try_per_thread\n"
-			<< "       maximal iterations count in method\n"
-			<< "  --max_frozen_loops\n"
-			<< "       max iterations count without any chages\n\n"
+		<< "\t--visibility\n"
+		<< "\t\tEnable verbose mode\n"
+		<< "\t--version\n"
+		<< "\tPrint version info\n"
+		<< "\t--help\n"
+		<< "\t\tPrint help message\n"
+		<< "\t--seed\n"
+		<< "\t\tseed for randomness. Warning: in multithread mode there is\n"
+		<< "\t--sbox_count\n"
+		<< "\t\ttarget sbox count. Default value - 1.\n"
+		<< "\t\tadditional randomnes caused by concurrency\n"
+		<< "\t--method [hill_climbing|simulated_annealing|genetic]\n"
+		<< "\t\thill_climbing = hill climbing method\n"
+		<< "\t\tsimulated_annealing = simulated annealing method\n"
+		<< "\t\tgenetic = genetic method\n"
+		<< "\t--cost_function [whs|wcf|pcf]\n"
+		<< "\t\twhs = WHS cost function\n"
+		<< "\t\twcf = WCF cost function\n"
+		<< "\t\tpcf = PCF cost function\n"
+		<< "\t\tcf1 = CF1 cost function\n"
+		<< "\t\tcf2 = CF2 cost function\n"
+		<< "\t--thread_count\n"
+		<< "\t\tmax thread count\n"
+		<< "\t--cost_type [int64_t|double]\n"
+		<< "\t\ttype of variable, where stored s-box cost.\n"
+		<< "\t\tDefault value - double\n"
+		<< "\t--try_per_thread\n"
+		<< "\t\tmaximal iterations count in method\n"
+		<< "\t--max_frozen_loops\n"
+		<< "\t\tmax iterations count without any chages\n\n"
 		<< "Method parameter list:\n\n"
-			<< "  --method_params\n"
-			<< "       params of method in format --method_params={param1,param2,...,paramN}\n"
-			<< "  hill_climbing:\n"
-			<< "       Has no free options\n"
-			<< "  simulated_annealing\n"
-			<< "       param1: max_outer_loops - maximal outer loop count\n"
-			<< "       param2: max_inner_loops - maximal inner loop count\n"
-			<< "       param3: initial_temperature -  initial temperature\n"
-			<< "       param4: alpha_parameter -  alpha_parameter\n"
-			<< "       Example: --method_params=\"{10, 10000, 1000, 0.99}\"\n\n"
+		<< "\t--method_params\n"
+		<< "\t\tparams of method in format\n"
+		<< "\t\t--method_params={param1,param2,...,paramN}\n"
+		<< "\thill_climbing:\n"
+		<< "\t\tHas no free options\n"
+		<< "\tsimulated_annealing\n"
+		<< "\t\tparam1: max_outer_loops - maximal outer loop count\n"
+		<< "\t\tparam2: max_inner_loops - maximal inner loop count\n"
+		<< "\t\tparam3: initial_temperature -  initial temperature\n"
+		<< "\t\tparam4: alpha_parameter -  alpha_parameter\n"
+		<< "\t\tExample: --method_params=\"{10, 10000, 1000, 0.99}\"\n\n"
 		<< "Cost function parameter list:\n\n"
-			<< "  --cost_function_params\n"
-			<< "       params of cost function in format --cost_function_params={param1,param2,...,paramN}\n"
-			<< "  whs\n"
-			<< "       param1: r\n"
-			<< "       param2: x\n"
-			<< "       Example: --cost_function_params=\"{12, 0}\"\n"
-			<< "  pcf\n"
-			<< "       param1: n\n"
-			<< "       Example: --cost_function_params=\"{5}\"\n"
-			<< "  wcf\n"
-			<< "       Has no free options\n\n"
+		<< "\t--cost_function_params\n"
+		<< "\t\tparams of cost function in format\n"
+		<< "\t\t--cost_function_params={param1,param2,...,paramN}\n"
+		<< "\twhs\n"
+		<< "\t\tparam1: r\n"
+		<< "\t\tparam2: x\n"
+		<< "\t\tExample: --cost_function_params=\"{12, 0}\"\n"
+		<< "\tcf1\n"
+		<< "\t\tparam1: r\n"
+		<< "\t\tparam2: x\n"
+		<< "\t\tparam2: y\n"
+		<< "\t\tExample: --cost_function_params=\"{12, 32, 0}\"\n"
+		<< "\tcf2\n"
+		<< "\t\tparam1: r\n"
+		<< "\t\tparam2: x\n"
+		<< "\t\tparam2: y\n"
+		<< "\t\tExample: --cost_function_params=\"{12, 32, 0}\"\n"
+		<< "\tpcf\n"
+		<< "\t\tparam1: n\n"
+		<< "\t\tExample: --cost_function_params=\"{5}\"\n"
+		<< "\twcf\n"
+		<< "\t\tHas no free options\n\n"
 		<< "Target properties:\n\n"
-			<< "  --nonlinearity\n"
-			<< "       target nonlinearity value.\n"
-			<< "  --delta_uniformity\n"
-			<< "       target delta uniformity value.\n"
-			<< "  --algebraic_immunity\n"
-			<< "       target algebraic immunity value.\n\n"
-			<< " Please refer to https://github.com/KandiyIIT/SBGen/README.md for more information.\n";
+		<< "\t--nonlinearity\n"
+		<< "\t\ttarget nonlinearity value.\n"
+		<< "\t--delta_uniformity\n"
+		<< "\t\ttarget delta uniformity value.\n"
+		<< "\t--algebraic_immunity\n"
+		<< "\t\ttarget algebraic immunity value.\n"
+		<< "\t--erase_fixed_points\n"
+		<< "\t\tdelete fixed points via affine transform\n\n"
+		<< "Please refer to https://github.com/KandiyIIT/SBGen/README.md\n"
+		<< "for more information.\n";
 }
 
-void parse_options(int argc, char **argv, std::map<int, std::string>& options)
+//-----------------------------------------------------------------------------
+
+void parse_options(
+	int				argc,
+	char			**argv,
+	options_t&		options)
 {
-	int flag;
-	int option_index;
-	const char* short_options = "";
-	
-	while ((flag=getopt_long(argc,argv,short_options, longopts,&option_index))!=-1)
+	int				flag;
+	int				option_index;
+	const char*		short_options = "";
+
+	while ((flag=getopt_long(
+		argc, argv, short_options, longopts, &option_index)) != -1)
 	{
 		std::string parameter_value = "";
-		
-		if(flag=='?')
+
+		if (flag == '?')
 			ABORT_MSG("Unknown parameter");
-		
-		if(longopts[option_index].has_arg == required_argument)
+
+		if (longopts[option_index].has_arg == required_argument)
 			parameter_value = optarg;
+
 		options[longopts[option_index].val] = parameter_value;
 	}
 }
 
-std::vector<std::string> &split(const std::string &s, char delim,std::vector<std::string> &elems) {
-    std::stringstream ss(s);
-    std::string item;
-    while (std::getline(ss, item, delim)) {
-        if (item.length() > 0) {
-            elems.push_back(item);  
-        }
-    }
-    return elems;
+//-----------------------------------------------------------------------------
+
+void split(
+	const std::string			&s,
+	char						delim,
+	std::vector<std::string>	&elems)
+{
+	std::stringstream			ss(s);
+	std::string					item;
+
+	while (std::getline(ss, item, delim))
+	{
+		if (item.length() > 0)
+		{
+			elems.push_back(item);  
+		}
+	}
 }
 
-std::vector<std::string> split(const std::string &s, char delim) {
-    std::vector<std::string> elems;
-    split(s, delim, elems);
-    return elems;
+//-----------------------------------------------------------------------------
+
+std::vector<std::string> split(
+	const std::string			&s,
+	char						delim)
+{
+	std::vector<std::string>	elems;
+
+	split(s, delim, elems);
+
+	return elems;
 }
+
+//-----------------------------------------------------------------------------
 
 template<typename T>
-std::pair<std::function<sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>,
-	sbgen::cost_function_data_t*>
-get_cost_function(std::map<int, std::string>& options)
+full_cost_info_t<T> get_cost_function(
+	options_t&			options)
 {
 	auto parameter = options.find(cost_function_flag);
-	if (parameter != options.end()) 
+
+	if (parameter != options.end())
 	{
-		if(parameter->second == "whs")
+		if (parameter->second == "whs")
 		{
 			int32_t x = 0;
 			int32_t r = 3;
-            
+
 			parameter = options.find(cost_function_params_flag);
+
 			if (parameter != options.end()) 
 			{
-                std::vector<std::string> values = split(parameter->second, ',');
+				std::vector<std::string> values =
+					split(parameter->second, ',');
 				
-				if(values.size()!=2)
+				if (values.size() != 2)
 				{
-					ABORT_MSG("Invalid parameters count for whs cost function");
+					ABORT_MSG("Invalid parameters count for whs function");
 				}
-				
+
 				try {
 					r = std::stoi(values[0]);
 					x = std::stoi(values[1]);
@@ -203,26 +268,107 @@ get_cost_function(std::map<int, std::string>& options)
 					std::cout << e.what() << "\n";
 				}
 				
-				return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
-					, sbgen::cost_function_data_t*>(sbgen::whs<T>,new sbgen::whs_function_data_t(r, x));
+				return std::make_pair<sbgen::cost_function_t<T>,
+					sbgen::cost_function_data_t*>(sbgen::whs<T>,
+					new sbgen::whs_function_data_t(r, x));
 			} 
 			else
 			{
 				ABORT_MSG("Can't find whs parameters");
 			}
-		} 
-		else if(parameter->second == "pcf")
+		} else if (parameter->second == "cf1")
 		{
-			int32_t n = 5;
-            
+			int32_t x = 0;
+			int32_t y = 0;
+			int32_t r = 0;
+
 			parameter = options.find(cost_function_params_flag);
+
 			if (parameter != options.end()) 
 			{
-                std::vector<std::string> values = split(parameter->second, ',');
+				std::vector<std::string> values =
+					split(parameter->second, ',');
+
+				if (values.size() != 3)
+				{
+					ABORT_MSG("Invalid parameters count for cf1 function");
+				}
+
+				try {
+					r = std::stoi(values[0]);
+					x = std::stoi(values[1]);
+					y = std::stoi(values[2]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+
+				return std::make_pair<sbgen::cost_function_t<T>,
+					sbgen::cost_function_data_t*>(sbgen::cf1<T>,
+					new sbgen::cf1_function_data_t(r, x, y));
+			} 
+			else
+			{
+				ABORT_MSG("Can't find cf1 parameters");
+			}
+		} else if (parameter->second == "cf2")
+		{
+			int32_t x = 0;
+			int32_t y = 0;
+			int32_t r = 0;
+
+			parameter = options.find(cost_function_params_flag);
+
+			if (parameter != options.end()) 
+			{
+				std::vector<std::string> values =
+					split(parameter->second, ',');
 				
+				if(values.size()!=3)
+				{
+					ABORT_MSG("Invalid parameters count for cf2 function");
+				}
+				
+				try {
+					r = std::stoi(values[0]);
+					x = std::stoi(values[1]);
+					y = std::stoi(values[2]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				return std::make_pair<sbgen::cost_function_t<T>,
+					sbgen::cost_function_data_t*>(sbgen::cf2<T>,
+					new sbgen::cf2_function_data_t(r, x, y));
+			} 
+			else
+			{
+				ABORT_MSG("Can't find cf2 parameters");
+			}
+		} else if(parameter->second == "pcf")
+		{
+			int32_t n = 5;
+
+			parameter = options.find(cost_function_params_flag);
+
+			if (parameter != options.end()) 
+			{
+				std::vector<std::string> values =
+					split(parameter->second, ',');
+
 				if(values.size()!=1)
 				{
-					ABORT_MSG("Invalid parameters count for pcf cost function");
+					ABORT_MSG("Invalid parameters count for pcf function");
 				}
 				
 				try {
@@ -237,8 +383,9 @@ get_cost_function(std::map<int, std::string>& options)
 					std::cout << e.what() << "\n";
 				}
 				
-				return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
-				, sbgen::cost_function_data_t*>(sbgen::pcf<T>,new sbgen::pcf_function_data_t(n));
+				return std::make_pair<sbgen::cost_function_t<T>,
+					sbgen::cost_function_data_t*>(sbgen::pcf<T>,
+					new sbgen::pcf_function_data_t(n));
 			} 
 			else
 			{
@@ -247,24 +394,34 @@ get_cost_function(std::map<int, std::string>& options)
 		}
 		else if(parameter->second == "wcf")
 		{
-			return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
-				, sbgen::cost_function_data_t*>(sbgen::wcf<T>,new sbgen::wcf_function_data_t());
+			return std::make_pair<sbgen::cost_function_t<T>,
+				sbgen::cost_function_data_t*>(sbgen::wcf<T>,
+				new sbgen::wcf_function_data_t());
 		}
-		ABORT_MSG("Unknown cost function. See help for avaliable cost functions");
+
+		ABORT_MSG("Unknown cost function. See help for avaliable functions");
 	}
-	return std::make_pair<std::function< sbgen::cost_info_t<T>(sbgen::cost_function_data_t*, std::array<uint8_t, 256>)>
-		, sbgen::cost_function_data_t*>(sbgen::wcf<T>,new sbgen::wcf_function_data_t());
+
+	return std::make_pair<sbgen::cost_function_t<T>,
+		sbgen::cost_function_data_t*>(
+			sbgen::wcf<T>,new sbgen::wcf_function_data_t());
 }
 
-void setup_properties (sbgen::properties_info_t* info,  std::map<int, std::string>& options) 
+//-----------------------------------------------------------------------------
+
+void setup_properties(
+	sbgen::properties_info_t*	info,
+	options_t&					options) 
 {
 	info->properties_config = 0;
+
 	try 
 	{
 		auto property = options.find(nonlinearity_flag);
 		if (property != options.end()) 
 		{
-			setup_property( info, SBGEN_NONLINEARITY, std::stoi(property->second));
+			setup_property( info,
+				SBGEN_NONLINEARITY, std::stoi(property->second));
 		}
 		else
 		{
@@ -274,13 +431,15 @@ void setup_properties (sbgen::properties_info_t* info,  std::map<int, std::strin
 		property = options.find(delta_uniformity_flag);
 		if (property != options.end()) 
 		{
-			setup_property( info, SBGEN_DELTA_UNIFORMITY, std::stoi(property->second));
+			setup_property( info,
+				SBGEN_DELTA_UNIFORMITY, std::stoi(property->second));
 		}
 		
 		property = options.find(algebraic_immunity_flag);
 		if (property != options.end()) 
 		{
-			setup_property( info, SBGEN_ALGEBRAIC_IMMUNITY, std::stoi(property->second));
+			setup_property( info,
+				SBGEN_ALGEBRAIC_IMMUNITY, std::stoi(property->second));
 		}
 		
 		property = options.find(seed_flag);
@@ -302,11 +461,86 @@ void setup_properties (sbgen::properties_info_t* info,  std::map<int, std::strin
 	{
 		std::cout << e.what() << "\n";
 	}
-	return;
 }
 
+//-----------------------------------------------------------------------------
+
 template<typename T>
-void run_generator(std::map<int, std::string>& options)
+auto get_selection_method(
+	sbgen::genetic_info_t<T>&	info,
+	options_t&					options)
+{
+	auto parameter = options.find(selection_method_flag);
+
+	if (parameter != options.end()) 
+	{
+		if (parameter->second == "basic")
+			return sbgen::selectors::basic_selection<T>;
+
+		if (parameter->second == "rank")
+			return sbgen::selectors::rank_sequential_selection<T>;
+
+		if (parameter->second == "roulette")
+			return sbgen::selectors::roulette_wheel_sequential_selection<T>;
+
+		ABORT_MSG("Unknown selection method. See help.");
+	}
+
+	return sbgen::selectors::basic_selection<T>;
+}
+
+//-----------------------------------------------------------------------------
+
+template<typename T>
+void setup_crossover_properties(
+	sbgen::genetic_info_t<T>&	info,
+	options_t&					options)
+{
+	if (info.use_crossover == false)
+		return;
+
+	auto parameter = options.find(crossover_method_flag);
+
+	if (parameter != options.end()) 
+	{
+		std::vector<std::string> values = split(parameter->second, ',');
+		if(values.size() != 3)
+			ABORT_MSG("Invalid crossover parameters. See help");
+		
+		try 
+		{
+			std::string crossover_name = values[0];
+			info.crossover_count = std::stoi(values[1]);
+			info.child_per_parent = std::stoi(values[2]);
+
+			if (crossover_name == "cycle")
+				info.crossover_method = sbgen::cossovers::cycle;
+
+			else if (crossover_name == "pmx")
+				info.crossover_method = sbgen::cossovers::pmx;
+
+			else ABORT_MSG("Unknown crossover method. See help.");
+		}
+		catch (const std::invalid_argument & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+		catch (const std::out_of_range & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+	}
+	else
+	{
+		ABORT_MSG("Can't find genetic crossover parameters");
+	}
+}
+
+//-----------------------------------------------------------------------------
+
+template<typename T>
+void run_generator(
+	options_t& options)
 {
 	int32_t thread_count = default_thread_count;
 	int32_t try_per_thread = default_try_per_thread;
@@ -362,7 +596,8 @@ void run_generator(std::map<int, std::string>& options)
 			info.cost_function = cost.first;
 			info.cost_data.reset(cost.second);
 			info.is_log_enabled = visibility;
-			setup_properties(static_cast<sbgen::properties_info_t*>(&info), options);
+			setup_properties(
+				static_cast<sbgen::properties_info_t*>(&info), options);
 			
 			std::cout<<"Starting hill climbing..."<<std::endl;
 			std::cout<<"Parameters:"<<std::endl;
@@ -371,20 +606,33 @@ void run_generator(std::map<int, std::string>& options)
 			std::cout<<"Max frozen loops: "<<info.max_frozen_count<<std::endl;
 			std::cout<<"Log level: "<<info.is_log_enabled<<std::endl;
 			std::cout<<"Cost Function: "<<info.cost_data->name()<<std::endl;
-			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG) {
-				std::cout<<"target NL: "<<info.target_properties[SBGEN_NONLINEARITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG)
+			{
+				std::cout<<"target NL: "
+					<<info.target_properties[SBGEN_NONLINEARITY]
+					<<std::endl;
 			} else std::cout<<"NL not used\n";
-			if(info.properties_config & SBGEN_USE_DELTA_UNIFORMITY_FLAG) {
-				std::cout<<"target DU: "<<info.target_properties[SBGEN_DELTA_UNIFORMITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_DELTA_UNIFORMITY_FLAG)
+			{
+				std::cout<<"target DU: "
+					<<info.target_properties[SBGEN_DELTA_UNIFORMITY]
+					<<std::endl;
 			}else std::cout<<"DU not used\n";
-			if(info.properties_config & SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG) {
-				std::cout<<"target AI: "<<info.target_properties[SBGEN_ALGEBRAIC_IMMUNITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG)
+			{
+				std::cout<<"target AI: "
+					<<info.target_properties[SBGEN_ALGEBRAIC_IMMUNITY]
+					<<std::endl;
 			}else std::cout<<"AI not used\n";
+
 			if(info.use_random_seed==true)
 				std::cout<<"Seed: random"<<std::endl;
 			else
 				std::cout<<"Seed: "<<info.seed<<std::endl;
-			
+
 			auto sbox = sbgen::hill_climbing<T>(info);
 
 			if (sbox.has_value()) 
@@ -393,18 +641,21 @@ void run_generator(std::map<int, std::string>& options)
 				
 				if(erase_points) 
 				{
-						sbgen::transform_utils::erase_fixed_points(sb, info.seed);
+					sbgen::transform_utils::erase_fixed_points(sb, info.seed);
 				}
-				
+
 				PRINT_SBOX(sb);
 				
-				std::cout<<"NL= "<<sbgen::properties::nonlinearity(sb)<<std::endl;
-				std::cout<<"DU= "<<sbgen::properties::delta_uniformity(sb)<<std::endl;
-				std::cout<<"AI= "<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
-				std::cout<<"Fixed Points= "<<sbgen::properties::fixed_points(sb)<<std::endl;
-				
+				std::cout<<"NL= "<<
+					sbgen::properties::nonlinearity(sb)<<std::endl;
+				std::cout<<"DU= "<<
+					sbgen::properties::delta_uniformity(sb)<<std::endl;
+				std::cout<<"AI= "
+					<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
+				std::cout<<"Fixed Points= "
+					<<sbgen::properties::fixed_points(sb)<<std::endl;
 			} else {
-				ABORT_MSG("SBox not found. Try another parameters or restart.");
+				ABORT_MSG("SBox not found. Try another parameters");
 			}
 		} 
 		else if(parameter->second == "simulated_annealing")
@@ -417,15 +668,17 @@ void run_generator(std::map<int, std::string>& options)
 			info.cost_function = cost.first;
 			info.cost_data.reset(cost.second);
 			info.is_log_enabled = visibility;
-			setup_properties(static_cast<sbgen::properties_info_t*>(&info), options);
-			
+			setup_properties(
+				static_cast<sbgen::properties_info_t*>(&info), options);
+
 			parameter = options.find(method_params_flag);
 			if (parameter != options.end()) 
 			{
-                std::vector<std::string> values = split(parameter->second, ',');
+				std::vector<std::string> values =
+					split(parameter->second, ',');
 				if(values.size() != 4)
-					ABORT_MSG("Invalid simulated annealing parameters. See help");
-				
+					ABORT_MSG("Invalid simulated annealing parameters.");
+
 				try 
 				{
 					info.max_outer_loops = std::stoi(values[0]);
@@ -458,15 +711,28 @@ void run_generator(std::map<int, std::string>& options)
 			std::cout<<"Max frozen loops: "<<info.max_frozen_outer_loops<<std::endl;
 			std::cout<<"Log level: "<<info.is_log_enabled<<std::endl;
 			std::cout<<"Cost Function: "<<info.cost_data->name()<<std::endl;
-			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG) {
-				std::cout<<"target NL: "<<info.target_properties[SBGEN_NONLINEARITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG)
+			{
+				std::cout<<"target NL: "
+					<<info.target_properties[SBGEN_NONLINEARITY]
+					<<std::endl;
 			} else std::cout<<"NL not used\n";
-			if(info.properties_config & SBGEN_USE_DELTA_UNIFORMITY_FLAG) {
-				std::cout<<"target DU: "<<info.target_properties[SBGEN_DELTA_UNIFORMITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_DELTA_UNIFORMITY_FLAG)
+			{
+				std::cout<<"target DU: "
+					<<info.target_properties[SBGEN_DELTA_UNIFORMITY]
+					<<std::endl;
 			}else std::cout<<"DU not used\n";
-			if(info.properties_config & SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG) {
-				std::cout<<"target AI: "<<info.target_properties[SBGEN_ALGEBRAIC_IMMUNITY]<<std::endl;
+
+			if(info.properties_config & SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG)
+			{
+				std::cout<<"target AI: "
+					<<info.target_properties[SBGEN_ALGEBRAIC_IMMUNITY]
+					<<std::endl;
 			}else std::cout<<"AI not used\n";
+
 			if(info.use_random_seed==true)
 				std::cout<<"Seed: random"<<std::endl;
 			else
@@ -480,29 +746,159 @@ void run_generator(std::map<int, std::string>& options)
 				
 				if(erase_points) 
 				{
-						sbgen::transform_utils::erase_fixed_points(sb, info.seed);
+					sbgen::transform_utils::erase_fixed_points(sb, info.seed);
 				}
 				
 				PRINT_SBOX(sb);
 				
-				std::cout<<"NL= "<<sbgen::properties::nonlinearity(sb)<<std::endl;
-				std::cout<<"DU= "<<sbgen::properties::delta_uniformity(sb)<<std::endl;
-				std::cout<<"AI= "<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
-				std::cout<<"Fixed Points= "<<sbgen::properties::fixed_points(sb)<<std::endl;
+				std::cout<<"NL= "
+					<<sbgen::properties::nonlinearity(sb)<<std::endl;
+				std::cout<<"DU= "
+					<<sbgen::properties::delta_uniformity(sb)<<std::endl;
+				std::cout<<"AI= "
+					<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
+				std::cout<<"Fixed Points= "
+					<<sbgen::properties::fixed_points(sb)<<std::endl;
 				
 			} else {
-				ABORT_MSG("SBox not found. Try another parameters or restart.");
+				ABORT_MSG("SBox not found. Try another parameters.");
+			}
+		}
+		else if(parameter->second == "genetic")
+		{
+			auto cost = get_cost_function<T>(options);
+			sbgen::genetic_info_t<T> info;
+			info.thread_count = thread_count;
+			info.iterations_count = try_per_thread;
+			info.is_log_enabled = visibility;
+			info.default_log_output = true;
+			info.delete_parents = false;
+
+			sbgen::selection_method_t<T> selection_method =
+				get_selection_method(info, options);
+			info.cost_function = cost.first;
+			info.cost_data.reset(cost.second);
+			setup_properties(
+				static_cast<sbgen::properties_info_t*>(&info), options);
+			
+			parameter = options.find(method_params_flag);
+			if (parameter != options.end()) 
+			{
+				std::vector<std::string> values =
+					split(parameter->second, ',');
+				if(values.size() != 4)
+					ABORT_MSG("Invalid simulated annealing parameters.");
+
+				try 
+				{
+					info.initial_population_count = std::stoi(values[0]);
+					info.mutants_per_parent = std::stoi(values[1]);
+					info.selection_count = std::stoi(values[2]);
+					info.use_crossover = std::stoi(values[3]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+				catch (const std::out_of_range & e) 
+				{
+					std::cout << e.what() << "\n";
+				}
+
+			}
+			else
+			{
+				ABORT_MSG("Can't find simulated annealing parameters");
+			}
+			setup_crossover_properties(info, options);
+			
+			std::cout<<"Starting genetic method..."<<std::endl;
+			/*
+			std::cout<<"Parameters:"<<std::endl;
+			std::cout<<"Thread count: "<<info.thread_count<<std::endl;
+			std::cout<<"Max outer loops in thread: "<<info.max_outer_loops<<std::endl;
+			std::cout<<"Max inner loops in thread: "<<info.max_inner_loops<<std::endl;
+			std::cout<<"Initial temperature: "<<info.initial_temperature<<std::endl;
+			std::cout<<"Alpha parameter: "<<info.alpha_parameter<<std::endl;
+			std::cout<<"Max frozen loops: "<<info.max_frozen_outer_loops<<std::endl;
+			std::cout<<"Log level: "<<info.is_log_enabled<<std::endl;
+			std::cout<<"Cost Function: "<<info.cost_data->name()<<std::endl;*/
+			if(info.properties_config & SBGEN_USE_NONLINEARITY_FLAG)
+			{
+				std::cout<<"target NL: "
+					<<info.target_properties[SBGEN_NONLINEARITY]
+					<<std::endl;
+			} else std::cout<<"NL not used\n";
+			if(info.properties_config & SBGEN_USE_DELTA_UNIFORMITY_FLAG)
+			{
+				std::cout<<"target DU: "
+					<<info.target_properties[SBGEN_DELTA_UNIFORMITY]
+					<<std::endl;
+			}else std::cout<<"DU not used\n";
+			if(info.properties_config & SBGEN_USE_ALGEBRAIC_IMMUNITY_FLAG)
+			{
+				std::cout<<"target AI: "
+					<<info.target_properties[SBGEN_ALGEBRAIC_IMMUNITY]
+					<<std::endl;
+			}else std::cout<<"AI not used\n";
+			
+			auto sbox = sbgen::genetic<T>(info);
+
+			if (sbox.has_value()) 
+			{
+				auto sb = sbox.value();
+				
+				if(erase_points) 
+				{
+					sbgen::transform_utils::erase_fixed_points(sb, info.seed);
+				}
+				
+				PRINT_SBOX(sb);
+				
+				std::cout<<"NL= "
+					<<sbgen::properties::nonlinearity(sb)<<std::endl;
+				std::cout<<"DU= "
+					<<sbgen::properties::delta_uniformity(sb)<<std::endl;
+				std::cout<<"AI= "
+					<<sbgen::properties::algebraic_immunity(sb)<<std::endl;
+				std::cout<<"Fixed Points= "
+					<<sbgen::properties::fixed_points(sb)<<std::endl;
+				
+			} else {
+				ABORT_MSG("SBox not found. Try another parameters.");
 			}
 		}
 	}
 }
 
-int main(int argc, char** argv) 
+//=============================================================================
+
+int main(
+	int				argc,
+	char**			argv) 
 {
-	std::map<int, std::string> options;
-	
-	parse_options(argc,argv, options);
-	
+	options_t		options;
+	int				sbox_count = default_sbox_count;
+
+	parse_options(argc, argv, options);
+
+	auto sbox_count_parameter = options.find(help_flag);
+	if (sbox_count_parameter != options.end())
+	{
+		try 
+		{
+			sbox_count = std::stoi(sbox_count_parameter->second);
+		}
+		catch (const std::invalid_argument & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+		catch (const std::out_of_range & e) 
+		{
+			std::cout << e.what() << "\n";
+		}
+	}
+
 	auto parameter = options.find(help_flag);
 	if (parameter != options.end() || argc == 1) 
 	{
@@ -521,11 +917,22 @@ int main(int argc, char** argv)
 	if (parameter != options.end()) 
 	{
 		if (parameter->second == "double")
-			run_generator<double>(options);
+		{
+			for (int i = 0; i < sbox_count; i++)
+				run_generator<double>(options);
+		}
 		else if (parameter->second == "int64_t")
-			run_generator<int64_t>(options);
+		{
+			for (int i = 0; i < sbox_count; i++)
+				run_generator<int64_t>(options);
+		}
 		else
 			ABORT_MSG("Unknown cost type. Possible values: double,int64_t");
 	} else
-		run_generator<double>(options);
+	{
+		for (int i = 0; i < sbox_count; i++)
+			run_generator<double>(options);
+	}
 }
+
+//=============================================================================

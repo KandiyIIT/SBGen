@@ -383,7 +383,7 @@ namespace sbgen
 					res[i] = b[i];
 			}
 
-			return std::move(res);
+			return res;
 		}
 
 		/**
@@ -442,7 +442,7 @@ namespace sbgen
 				index_values[value] = true;
 			}
 
-			return std::move(res);
+			return res;
 		}
 	}; // class cossovers
 

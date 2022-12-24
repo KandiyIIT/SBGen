@@ -56,7 +56,7 @@ namespace sbgen
 		// flags
 		bool use_crossover;
 		bool is_log_enabled;
-		bool delete_parents;
+		bool delete_parents = false;
 		bool use_log_function = false;
 		bool default_log_output = true;
 		bool log_good_nl = false;
@@ -64,7 +64,7 @@ namespace sbgen
 		// functional parameters
 		std::unique_ptr<cost_function_data_t> cost_data;
 		cost_function_t<T> cost_function;
-		genetic_comparator<T> comparator;
+		genetic_comparator<T> comparator;// = comparators::less_nl<T>;
 		selection_method_t<T> selection_method;
 		crossover_method_t crossover_method;
 
