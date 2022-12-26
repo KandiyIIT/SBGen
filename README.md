@@ -98,7 +98,8 @@ List of options:
 		hill_climbing = hill climbing method
 		simulated_annealing = simulated annealing method
 		genetic = genetic method
-	--cost_function [whs|wcf|pcf|cf1|cf2]
+	--cost_function [max_whs|whs|wcf|pcf|cf1|cf2]
+		max_whs = maxWHS cost function
 		whs = WHS cost function
 		wcf = WCF cost function
 		pcf = PCF cost function
@@ -149,6 +150,10 @@ Cost function parameter list:
 	--cost_function_params
 		params of cost function in format
 		--cost_function_params="param1,param2,...,paramN"
+	max_whs
+		param1: r
+		param2: x
+		Example: --cost_function_params="4, 36"
 	whs
 		param1: r
 		param2: x

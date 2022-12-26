@@ -112,7 +112,8 @@ void print_help()
 		<< "\t\thill_climbing = hill climbing method\n"
 		<< "\t\tsimulated_annealing = simulated annealing method\n"
 		<< "\t\tgenetic = genetic method\n"
-		<< "\t--cost_function [whs|wcf|pcf|cf1|cf2]\n"
+		<< "\t--cost_function [max_whs|whs|wcf|pcf|cf1|cf2]\n"
+		<< "\t\tmax_whs = maxWHS cost function\n"
 		<< "\t\twhs = WHS cost function\n"
 		<< "\t\twcf = WCF cost function\n"
 		<< "\t\tpcf = PCF cost function\n"
@@ -159,6 +160,10 @@ void print_help()
 		<< "\t--cost_function_params\n"
 		<< "\t\tparams of cost function in format\n"
 		<< "\t\t--cost_function_params=\"param1,param2,...,paramN\"\n"
+		<< "\tmax_whs\n"
+		<< "\t\tparam1: r\n"
+		<< "\t\tparam2: x\n"
+		<< "\t\tExample: --cost_function_params=\"4, 36\"\n"
 		<< "\twhs\n"
 		<< "\t\tparam1: r\n"
 		<< "\t\tparam2: x\n"
@@ -296,6 +301,44 @@ full_cost_info_t<T> get_cost_function(
 			else
 			{
 				ABORT_MSG("Can't find whs parameters");
+			}
+		} else if (parameter->second == "max_whs")
+		{
+			int32_t x = 0;
+			int32_t r = 3;
+
+			parameter = options.find(cost_function_params_flag);
+
+			if (parameter != options.end()) 
+			{
+				std::vector<std::string> values =
+					split(parameter->second, ',');
+				
+				if (values.size() != 2)
+				{
+					ABORT_MSG("Invalid parameters count for whs function");
+				}
+
+				try {
+					r = std::stoi(values[0]);
+					x = std::stoi(values[1]);
+				}
+				catch (const std::invalid_argument & e) 
+				{
+					ABORT_MSG(e.what());
+				}
+				catch (const std::out_of_range & e) 
+				{
+					ABORT_MSG(e.what());
+				}
+				
+				return std::make_pair<sbgen::cost_function_t<T>,
+					sbgen::cost_function_data_t*>(sbgen::max_whs<T>,
+					new sbgen::max_whs_function_data_t(r, x));
+			} 
+			else
+			{
+				ABORT_MSG("Can't find max_whs parameters");
 			}
 		} else if (parameter->second == "cf1")
 		{

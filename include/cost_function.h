@@ -241,6 +241,161 @@ namespace sbgen
 	}
 
 	/**
+	* @brief maxWHS cost function parameters
+	**/
+	class max_whs_function_data_t : public cost_function_data_t
+	{
+	public:
+		int32_t r; // r-parameter 
+		int32_t x; // x-parameter
+
+		/**
+		* @brief Cost function name
+		**/
+		std::string name() override{
+				return "max_whs";
+		}
+
+		/**
+		* @brief Constructor for whs_function_data_t
+		*/
+		max_whs_function_data_t(int _r, int _x) : r(_r), x(_x) {};
+
+		/**
+		* @brief Destructor for whs_function_data_t
+		*/
+		virtual ~max_whs_function_data_t() {};
+
+	}; // class whs_function_data_t
+
+
+	/**
+	* @brief maxWHS cost function
+	*
+	* Sum( max(abs(abs(WHT(i,j)) - x)^r)) for i = 0..255)  , j= 0..7    
+	*
+	* @param _data
+	*    max_whs cost function data
+	* @param sbox
+	*    target s-box
+	*@returns
+	*   cost of target s-box
+	*/
+	// specialization for case r<0
+	template <typename T>
+	cost_info_t<T> _max_whs_minus (
+		cost_function_data_t* _data, 
+		sbox_t sbox
+	) 
+	{
+		uint8_t truth_table[256];
+		int32_t max_spectre = 0;
+		int spectre[256];
+		cost_info_t<T> cost;
+
+		max_whs_function_data_t* data = static_cast<max_whs_function_data_t*>(_data);
+		if (data->r < 0)
+			data->r = -data->r;
+
+		cost.cost = 0;
+		for (int b = 1; b < 256; b++)
+		{
+			for (int i = 0; i < 256; i++)
+			{
+				truth_table[i] =
+					sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+			}
+
+			sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+			int max_component = 0;
+			for (int i = 0; i < 256; i++)
+			{
+				int spectre_temp = spectre[i];
+
+				if (spectre_temp < 0)
+					spectre_temp = -spectre_temp;
+				if (spectre_temp > max_component)
+					max_component = spectre_temp;
+			}
+
+			T val = ((max_component - data->x) >= 0) ?
+					(max_component - data->x) : -(max_component - data->x);
+			T part = val;
+			T one = 1.0;
+			assert(((void)"error: absolute spectre value less 0", val >= 0));
+
+			for (int k = 1; k < data->r; k++)
+				part *= val;
+			if (part != 0)
+				cost.cost += one/part;
+
+			if (max_component > max_spectre)
+				max_spectre = static_cast<int32_t>(max_component);
+		}
+
+		cost.nonlinearity = 128 - max_spectre / 2;
+
+		return cost;
+	}
+
+	template <typename T>
+	cost_info_t<T> max_whs (
+		cost_function_data_t* _data, 
+		sbox_t sbox
+	) 
+	{
+		uint8_t truth_table[256];
+		int32_t max_spectre = 0;
+		int spectre[256];
+		cost_info_t<T> cost;
+
+		max_whs_function_data_t* data = static_cast<max_whs_function_data_t*>(_data);
+		if (data->r < 0)
+			return _max_whs_minus<T>(_data, sbox);
+
+		cost.cost = 0;
+		for (int b = 1; b < 256; b++)
+		{
+			for (int i = 0; i < 256; i++)
+			{
+				truth_table[i] =
+					sbgen::transform_utils::one_bits[sbox[i] & b] & 0x01;
+			}
+
+			sbgen::transform_utils::fwht_transform(truth_table, spectre);
+
+			int max_component = 0;
+			for (int i = 0; i < 256; i++)
+			{
+				int spectre_temp = spectre[i];
+
+				if (spectre_temp < 0)
+					spectre_temp = -spectre_temp;
+				if (spectre_temp > max_component)
+					max_component = spectre_temp;
+			}
+
+			T val = ((max_component - data->x) >= 0) ?
+					(max_component - data->x) : -(max_component - data->x);
+			T part = val;
+			assert(((void)"error: absolute spectre value less 0", val >= 0));
+
+			for (int k = 1; k < data->r; k++)
+				part *= val;
+			if (part != 0)
+				cost.cost += part;
+
+			if (max_component > max_spectre)
+				max_spectre = static_cast<int32_t>(max_component);
+		}
+
+		cost.nonlinearity = 128 - max_spectre / 2;
+
+		return cost;
+	}
+
+	/**
 	* @brief WCF cost function parameters
 	**/
 	class wcf_function_data_t : public cost_function_data_t {

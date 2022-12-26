@@ -113,17 +113,14 @@ namespace sbgen
 				{
 					if (info.is_log_enabled)
 					{
-						if (info.use_log_function && info.log_good_nl)
-							info.log_good_nl_function(params, info);
-						if (info.default_log_output)
-						{
-							std::cout << "cost=" 
+						std::cout << "cost=" 
 							<< params.best_sbox.cost.cost 
 							<< "	NL=" 
 							<< params.best_sbox.cost.nonlinearity 
-							<< "temperature=" 
-							<< current_temperature << std::endl;
-						}
+							<< "	temperature=" 
+							<< current_temperature 
+							<< "	Iteration= " 
+							<< params.iteration.load() << std::endl;
 					}
 
 					if(!generator_utils::check_additional_properties(
@@ -143,6 +140,11 @@ namespace sbgen
 				}
 
 				params.sbox_mutex.lock();
+				if (params.is_found)
+				{
+					params.sbox_mutex.unlock();
+					return;
+				}
 				double cost_diff = 
 					(double)(sbox.cost.cost - params.best_sbox.cost.cost);
 
@@ -153,18 +155,14 @@ namespace sbgen
 
 					if (info.is_log_enabled)
 					{
-						if (info.use_log_function && info.log_better_sbox)
-							info.log_better_sbox_function(params, info);
-						if (info.default_log_output)
-						{
-							std::cout << "cost=" 
+						std::cout << "cost=" 
 							<< params.best_sbox.cost.cost 
 							<< "	NL=" 
 							<< params.best_sbox.cost.nonlinearity 
-							<< "temperature=" 
+							<< "	temperature=" 
 							<< current_temperature 
-							<< std::endl;
-						}
+							<< "	Iteration= " 
+							<< params.iteration.load() << std::endl;
 					}
 				} else
 				{
@@ -173,32 +171,42 @@ namespace sbgen
 					{
 						params.best_sbox = sbox;
 						accept_in_this_loop = true;
+						std::cout << "cost=" 
+							<< params.best_sbox.cost.cost 
+							<< "	NL=" 
+							<< params.best_sbox.cost.nonlinearity 
+							<< "	temperature=" 
+							<< current_temperature 
+							<< "	Iteration= " 
+							<< params.iteration.load() << std::endl;
 					}
-				}
-
-				if(params.frozen_count/info.thread_count >=
-					info.max_frozen_outer_loops)
-				{
-					params.sbox_mutex.unlock();
-					return;
-				}
-
-				if (accept_in_this_loop == false)
-				{
-					params.frozen_count++;
-					if (params.frozen_count/info.thread_count >=
-						info.max_frozen_outer_loops)
-					{
-						break;
-					}
-				}
-				else 
-				{
-					params.frozen_count = 0;
 				}
 				params.sbox_mutex.unlock();
 			} // inner loop
 
+			params.sbox_mutex.lock();
+			if(params.frozen_count/info.thread_count >=
+				info.max_frozen_outer_loops)
+			{
+				params.sbox_mutex.unlock();
+				return;
+			}
+
+			if (accept_in_this_loop == false)
+			{
+				params.frozen_count++;
+				if (params.frozen_count/info.thread_count >=
+					info.max_frozen_outer_loops)
+				{
+					params.sbox_mutex.unlock();
+					break;
+				}
+			}
+			else 
+			{
+				params.frozen_count = 0;
+			}
+			params.sbox_mutex.unlock();
 			current_temperature *= info.alpha_parameter;
 		} // outer loop
 		return;

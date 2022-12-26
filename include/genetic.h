@@ -35,6 +35,7 @@ namespace sbgen
 		std::atomic<bool> is_sbox_found;
 
 		std::atomic<uint32_t> iteration;
+		std::atomic<uint32_t> total_sbox_count;
 	};
 
 	/**
@@ -136,6 +137,7 @@ namespace sbgen
 					pos_2 = distrib(gen);
 				}
 				std::swap(mutant.sbox[pos_1], mutant.sbox[pos_2]);
+				params.total_sbox_count.fetch_add(1);
 				mutant.cost = info.cost_function(
 					info.cost_data.get(), mutant.sbox);
 
@@ -163,9 +165,8 @@ namespace sbgen
 							<< params.best_sbox.cost.nonlinearity 
 							<< std::endl;
 							std::cout<<"SEARCH COST:"
-								<<params.iteration.load()*(
-									info.selection_count+info.crossover_count
-								)<<std::endl;
+								<< params.total_sbox_count.load()
+								<<std::endl;
 						}
 					}
 					params.sbox_mutex.unlock();
@@ -246,6 +247,7 @@ namespace sbgen
 			thread.join();
 		}
 		workers.clear();
+		thread_data.total_sbox_count.fetch_add(info.initial_population_count);
 
 		for (int i = 0; i < info.iterations_count; i++)
 		{
@@ -287,6 +289,7 @@ namespace sbgen
 							thread_data.successors[pos_2].sbox);
 						sb.cost = info.cost_function(
 							info.cost_data.get(), sb.sbox);
+						thread_data.total_sbox_count.fetch_add(1);
 						thread_data.successors.push_back(std::move(sb));
 					}
 				}
